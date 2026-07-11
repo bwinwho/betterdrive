@@ -387,6 +387,32 @@ body.kbrowse .znum{opacity:.18}
   display:flex;flex-direction:column;box-shadow:-30px 0 80px rgba(0,0,0,.5);
 }
 #preview.show{transform:translateX(0)}
+/* fullscreen mode: image/video/audio/text/pdf take over the whole window
+   instead of the narrow side panel, matching a proper viewer/player/editor
+   rather than a metadata drawer */
+#preview.pv-fullscreen{width:100vw;left:0;border-left:none}
+#preview.pv-fullscreen .pv-head{padding:18px 28px 0}
+#preview.pv-fullscreen .pv-head .ttl{
+  font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  font-weight:500;text-shadow:none;color:var(--dim);
+}
+#preview.pv-fullscreen .pv-meta{opacity:.55;padding:8px 28px 0}
+#preview.pv-fullscreen .pv-body{margin:16px 28px;border:none;background:transparent}
+#preview.pv-fullscreen .pv-actions{opacity:.5;transition:opacity .25s var(--ease)}
+#preview.pv-fullscreen .pv-actions:hover{opacity:1}
+#preview.pv-fullscreen .player .disc{width:200px;height:200px}
+.pv-nav{
+  position:absolute;top:50%;transform:translateY(-50%);width:48px;height:48px;border-radius:50%;
+  background:rgba(10,10,9,.55);border:1px solid var(--faint-2);display:flex;align-items:center;justify-content:center;
+  color:var(--dim);opacity:.4;transition:all .25s var(--ease);z-index:5;
+}
+.pv-nav:hover{opacity:1;color:var(--cream);background:rgba(10,10,9,.8)}
+.pv-nav.prev{left:16px}
+.pv-nav.next{right:16px}
+.pv-counter{
+  position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--dim);opacity:.6;z-index:5;
+}
 .pv-head{display:flex;align-items:flex-start;gap:14px;padding:26px 28px 0}
 .pv-head .ttl{font-family:var(--serif);font-size:clamp(24px,3vw,32px);font-weight:600;line-height:1.05;word-break:break-word;flex:1;text-shadow:0 0 24px rgba(246,242,230,.15)}
 .pv-close{font-family:var(--mono);font-size:11px;color:var(--dim);padding:8px 12px;border:1px solid var(--faint);border-radius:2px;transition:all .3s var(--ease)}
@@ -842,6 +868,7 @@ function kind(f){
   if(f.mimeType===FOLDER_MIME) return 'folder';
   if(f.appProperties && f.appProperties.bdlink) return 'link';
   if(f._local && /\.bdlink$/i.test(f.name)) return 'link';
+  if(f._local && /\.exe$/i.test(f.name)) return 'exe';
   const m=f.mimeType||'';
   if(m.startsWith('image/')) return 'image';
   if(m.startsWith('audio/')) return 'audio';
@@ -852,7 +879,9 @@ function kind(f){
   if(m.startsWith('text/')||/json|javascript|xml/.test(m)) return 'text';
   return 'file';
 }
-const GLYPH = {image:'IMG',audio:'AUD',video:'VID',pdf:'PDF',gdoc:'DOC',archive:'ZIP',text:'TXT',link:'LNK',file:'FILE'};
+const GLYPH = {image:'IMG',audio:'AUD',video:'VID',pdf:'PDF',gdoc:'DOC',archive:'ZIP',text:'TXT',link:'LNK',file:'FILE',exe:'EXE'};
+const ICON_STAR = '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 2l2.9 6.26L21.8 9l-5.4 4.73L17.8 21 12 17.27 6.2 21l1.4-7.27L2.2 9l6.9-.74z"/></svg>';
+const ICON_MOVE = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10m0 0l-3.5-3.5M17 7l-3.5 3.5M17 17H7m0 0l3.5-3.5M7 17l3.5 3.5"/></svg>';
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 function hostOf(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch(e){ return 'link'; } }
 function persistCore(){ LS.set('zones',S.zones); LS.set('activeZone',S.activeZoneId); LS.set('sort',S.sort); }
@@ -1162,7 +1191,7 @@ function renderCrumb(){
 function sorted(arr){ return [...arr].sort(SORTS[S.sort].fn); }
 
 function renderStage(animate=true){
-  const stage=$('#stage'); stage.innerHTML='';
+  const stage=$('#stage');
   stage.classList.toggle('no-anim', !animate);
   if(S.searching) return;
   renderCrumb();
@@ -1171,21 +1200,29 @@ function renderStage(animate=true){
   S.displayOrder = [...folders, ...files];
   let i=0, num=0;
 
+  /* build the whole new view off-screen first, then swap it in with a single
+     replaceChildren() — clearing #stage and repopulating it separately left a
+     visible gap (a black flash) while hundreds of cards were being built for
+     large folders */
+  const frag=document.createDocumentFragment();
   if(folders.length){
-    const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Folders'; stage.appendChild(lbl);
+    const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Folders'; frag.appendChild(lbl);
     const g=document.createElement('div'); g.className='grid-folders';
     folders.forEach(f=> g.appendChild(folderCard(f, i++, ++num)));
-    stage.appendChild(g);
+    frag.appendChild(g);
   }
   if(files.length){
-    const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Files'; stage.appendChild(lbl);
+    const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Files'; frag.appendChild(lbl);
     const g=document.createElement('div'); g.className='grid-files';
     files.forEach(f=> g.appendChild(fileCard(f, i++, ++num)));
-    stage.appendChild(g);
+    frag.appendChild(g);
   }
   if(!folders.length && !files.length){
-    stage.innerHTML += `<div class="empty"><div class="big">Nothing here yet</div><p>Drop files anywhere to upload</p></div>`;
+    const empty=document.createElement('div'); empty.className='empty';
+    empty.innerHTML=`<div class="big">Nothing here yet</div><p>Drop files anywhere to upload</p>`;
+    frag.appendChild(empty);
   }
+  stage.replaceChildren(frag);
   /* keyboard focus: restore if the item survived, or land on first card after kb navigation */
   if(S.kbNav){ S.kbNav=false; setFocus(S.displayOrder[0]?.id||null, false); }
   else if(S.focusId && S.displayOrder.some(f=>f.id===S.focusId)) setFocus(S.focusId, false);
@@ -1202,8 +1239,8 @@ function folderCard(f, i, num){
   el.innerHTML = `
     ${num&&num<=9?`<div class="idx">${num}</div>`:''}
     <svg class="foldericon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6z"/></svg>
-    ${zone()?.type==='recent'?'<button class="move" title="Move to…">⇄</button>':''}
-    <button class="fav${isFavourited(f.id)?' active':''}">★</button>
+    ${zone()?.type==='recent'?`<button class="move" title="Move to…">${ICON_MOVE}</button>`:''}
+    <button class="fav${isFavourited(f.id)?' active':''}">${ICON_STAR}</button>
     <div class="check">✓</div>
     <div class="title">${esc(f.name)}</div>
     <div class="meta">
@@ -1232,8 +1269,8 @@ function fileCard(f, i, num){
     : `<span class="typeglyph"${f._local?' data-native-icon':''}>${GLYPH[k]||'FILE'}</span>`;
   el.innerHTML = `
     ${num&&num<=9?`<div class="idx">${num}</div>`:''}
-    ${zone()?.type==='recent'?'<button class="move" title="Move to…">⇄</button>':''}
-    <button class="fav${isFavourited(f.id)?' active':''}">★</button>
+    ${zone()?.type==='recent'?`<button class="move" title="Move to…">${ICON_MOVE}</button>`:''}
+    <button class="fav${isFavourited(f.id)?' active':''}">${ICON_STAR}</button>
     <div class="check">✓</div>
     ${thumb}
     <div class="title">${esc(displayName(f))}</div>
@@ -1288,11 +1325,22 @@ function observeThumb(el, f){
 async function openItem(f){
   if(f.mimeType===FOLDER_MIME) return S.searching ? jumpToFolder(f) : openFolder(f);
   trackRecent(f);
-  if(kind(f)==='link'){
+  const k=kind(f);
+  if(k==='link'){
     if(f._local){
       try{ const buf=await window.localFS.readFile(f.id); window.open(new TextDecoder().decode(buf).trim(),'_blank'); }
       catch(e){ toast(e.message,true); }
     } else window.open(f.appProperties.bdlink,'_blank');
+    return;
+  }
+  if(k==='exe' && f._local){ window.localFS.openPath(f.id); return; }
+  if(k==='archive' && f._local && /\.zip$/i.test(f.name)){
+    toast('Extracting '+f.name+'…');
+    try{
+      const dest=await window.localFS.extractZip(f.id);
+      delete S.cache[currentFolderId()]; await loadCurrent();
+      toast('Extracted to '+dest.split(/[\\/]/).pop());
+    }catch(e){ toast(e.message||'Extraction failed',true); }
     return;
   }
   openPreview(f);
@@ -1781,23 +1829,27 @@ $('#dirpick').onchange=e=>{
 $('#btn-link').onclick=()=> newLinkFlow();
 
 /* ================= PREVIEW ================= */
+const FULLSCREEN_KINDS = ['image','video','audio','text','pdf'];
 function openPreview(f){
   S.pvFile=f;
+  const k=kind(f);
+  $('#preview').classList.toggle('pv-fullscreen', FULLSCREEN_KINDS.includes(k));
   $('#pv-title').textContent=f.name;
-  $('#pv-meta').innerHTML = [GLYPH[kind(f)]||'FILE', f.size?fmtSize(f.size):null, timeAgo(f.modifiedTime).toUpperCase()]
+  $('#pv-meta').innerHTML = [GLYPH[k]||'FILE', f.size?fmtSize(f.size):null, timeAgo(f.modifiedTime).toUpperCase()]
     .filter(Boolean).map(x=>`<span>${x}</span>`).join('<span class="sep">·</span>')
     + (f._local ? `<span class="pv-path" title="Click to copy path">${esc(f.id)}</span>` : '');
   $('#pv-meta .pv-path')?.addEventListener('click', ()=>{ navigator.clipboard?.writeText(f.id); toast('Path copied'); });
   const body=$('#pv-body'); body.innerHTML='<div class="loading">Loading</div>';
-  const k=kind(f);
   if(S.pvObjectUrl){ URL.revokeObjectURL(S.pvObjectUrl); S.pvObjectUrl=null; }
 
   if(k==='image'){
     if(f._local){
       body.innerHTML=`<img src="${toFileUrl(f.id)}" alt="" onerror="this.parentElement.innerHTML='&lt;div class=&quot;loading&quot;&gt;Could not load image&lt;/div&gt;'">`;
+      wireImageNav(body,f);
     } else {
       fetchBlob(f.id).then(b=>{ if(S.pvFile?.id!==f.id) return;
         S.pvObjectUrl=URL.createObjectURL(b); body.innerHTML=`<img src="${S.pvObjectUrl}" alt="">`;
+        wireImageNav(body,f);
       }).catch(()=> embedFallback(body,f));
     }
   }
@@ -1871,11 +1923,22 @@ async function openTextEditor(body, f){
   ta.focus();
 }
 
+function wireImageNav(body,f){
+  const imgs=(S.displayOrder||[]).filter(x=>kind(x)==='image');
+  const idx=imgs.findIndex(x=>x.id===f.id);
+  if(idx<0 || imgs.length<2) return;
+  const prev=document.createElement('button'); prev.className='pv-nav prev'; prev.innerHTML='‹';
+  const next=document.createElement('button'); next.className='pv-nav next'; next.innerHTML='›';
+  const counter=document.createElement('div'); counter.className='pv-counter'; counter.textContent=(idx+1)+' / '+imgs.length;
+  prev.onclick=e=>{ e.stopPropagation(); openPreview(imgs[(idx-1+imgs.length)%imgs.length]); };
+  next.onclick=e=>{ e.stopPropagation(); openPreview(imgs[(idx+1)%imgs.length]); };
+  body.append(prev,next,counter);
+}
 function embedFallback(body,f){
   if(f._local){
     const k=kind(f);
     if(k==='video'){
-      body.innerHTML=`<video src="${toFileUrl(f.id)}" controls autoplay style="max-width:100%;max-height:100%"></video>`;
+      body.innerHTML=`<video src="${toFileUrl(f.id)}" controls autoplay style="width:100%;height:100%;object-fit:contain"></video>`;
     } else if(k==='pdf'){
       body.innerHTML=`<iframe src="${toFileUrl(f.id)}"></iframe>`;
     } else if(k==='text'){
@@ -1895,6 +1958,10 @@ function closePreview(){
   S.pvFile=null;
 }
 $('#pv-close').onclick=closePreview; $('#scrim').onclick=closePreview;
+/* redundant safety net: catch Escape here too, in capture phase, in case some
+   focused child (e.g. the text editor textarea) ever stops it from bubbling
+   up to the window-level handler */
+$('#preview').addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePreview(); } }, true);
 
 /* ================= SEARCH ================= */
 let searchTimer=null, searchSeq=0;
@@ -2058,6 +2125,13 @@ addEventListener('keydown', e=>{
     if(S.searching){ exitSearch(); loadCurrentFromCacheOnly(); return; }
     if(!atZoneRoot()) return goBack();
     if(S.keyMode==='browse'){ S.keyMode='worlds'; syncKB(); } /* root: drop back to world-select */
+    return;
+  }
+  if((e.key==='ArrowLeft'||e.key==='ArrowRight') && $('#preview').classList.contains('show') && S.pvFile && kind(S.pvFile)==='image'){
+    e.preventDefault();
+    const imgs=(S.displayOrder||[]).filter(x=>kind(x)==='image');
+    const idx=imgs.findIndex(x=>x.id===S.pvFile.id);
+    if(idx>=0 && imgs.length>1) openPreview(imgs[(idx+(e.key==='ArrowRight'?1:-1)+imgs.length)%imgs.length]);
     return;
   }
   if(isTyping() || modalOpen) return; /* digits/backspace belong to the input */

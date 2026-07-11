@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('localFS', {
   specialFolders: () => ipcRenderer.invoke('fs:specialFolders'),
   fileIcon: (targetPath) => ipcRenderer.invoke('fs:fileIcon', targetPath),
   recentFiles: () => ipcRenderer.invoke('fs:recentFiles'),
+  extractZip: (zipPath) => ipcRenderer.invoke('fs:extractZip', zipPath),
   driveInfo: () => ipcRenderer.invoke('fs:driveInfo'),
   list: (dirPath) => ipcRenderer.invoke('fs:list', dirPath),
   mkdir: (parentPath, name) => ipcRenderer.invoke('fs:mkdir', parentPath, name),

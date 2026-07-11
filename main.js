@@ -136,6 +136,25 @@ ipcMain.handle('fs:fileIcon', async (e, targetPath) => {
   } catch (err) { return null; }
 });
 
+/* ---------- zip extraction via PowerShell's built-in Expand-Archive — no bundled
+   archive library needed. Extracts next to the zip, into a same-named folder,
+   picking "(2)", "(3)"... if that folder already exists. ---------- */
+ipcMain.handle('fs:extractZip', (e, zipPath) => new Promise((resolve, reject) => {
+  if (process.platform !== 'win32') return reject(new Error('Zip extraction is only available on Windows'));
+  const dir = path.dirname(zipPath);
+  const base = path.basename(zipPath, path.extname(zipPath));
+  let dest = path.join(dir, base);
+  let n = 2;
+  while (fs.existsSync(dest)) { dest = path.join(dir, `${base} (${n})`); n++; }
+  const psScript = [
+    `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${dest.replace(/'/g, "''")}' -Force`,
+  ].join('\n');
+  execFile('powershell', ['-NoProfile', '-Command', psScript], { timeout: 60000 }, (err, stdout, stderr) => {
+    if (err) return reject(new Error(stderr || err.message));
+    resolve(dest);
+  });
+}));
+
 /* ---------- Windows' own "Recent" list — the .lnk shortcuts Explorer/Office/etc.
    already drop into %AppData%/Microsoft/Windows/Recent every time any app opens a
    file. Resolving them via the WScript.Shell COM object (through PowerShell) needs
