@@ -1,0 +1,33 @@
+{
+  "name": "betterdrive",
+  "version": "1.0.0",
+  "description": "Your files, rebuilt beautiful.",
+  "main": "main.js",
+  "author": "Bwin31 / Kode31",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.0"
+  },
+  "build": {
+    "appId": "com.kode31.betterdrive",
+    "productName": "BetterDrive",
+    "files": ["index.html", "main.js", "preload.js", "icons/**/*"],
+    "directories": { "output": "dist" },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
