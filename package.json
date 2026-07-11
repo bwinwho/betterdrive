@@ -1,6 +1,6 @@
 {
   "name": "betterdrive",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Your files, rebuilt beautiful.",
   "main": "main.js",
   "author": "Bwin31 / Kode31",
@@ -22,7 +22,8 @@
     "publish": {
       "provider": "github",
       "owner": "bwinwho",
-      "repo": "betterdrive"
+      "repo": "betterdrive",
+      "releaseType": "release"
     },
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
