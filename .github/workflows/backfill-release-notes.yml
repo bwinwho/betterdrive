@@ -1,0 +1,113 @@
+name: Backfill Release Notes
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: v1.1.1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<'EOF'
+          First public release.
+
+          ## Worlds
+          - Redesigned the world switcher around your real Windows folders: **Documents, Pictures, Downloads**, plus **Files** (a local BetterDrive folder) and **Favourites** (a virtual collection of starred items). Google Drive is now opt-in only, no longer auto-connected.
+          - Real native file/folder shell icons and real drive volume labels in the PC browser, via Electron's built-in icon API and a PowerShell volume query — no bundled native addon needed.
+
+          ## Fixes
+          - The world-switcher bar was rendering off-center (a CSS animation was silently clobbering its centering transform).
+          - The file preview panel had overlapping action buttons and its title sat partly behind the custom titlebar.
+          - Local image thumbnails all showed the same picture (a shared image-loader was closing over the wrong file).
+
+          ## UI
+          - Fullscreen, non-resizable window; a much smaller breadcrumb bar; the old big "New folder / New link / Browse PC" tiles replaced with compact "+ Add" / "Link" toolbar buttons.
+          - One-click favourite star on every card.
+          EOF
+          gh release edit v1.1.1 --repo "${{ github.repository }}" --notes-file notes.md
+
+      - name: v1.1.2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## New: Recent world
+          - A new **Recent** tab (first in the bar) reads Windows' own Recent Items list and merges it with files you've opened in BetterDrive itself.
+          - Recent's cards get an extra "Move to…" action for quickly filing a recent file into another world.
+          - Removed the old per-world "Jump back in" strip now that Recent covers that on its own.
+
+          ## Polish
+          - The select checkbox and favourite star are lightly visible by default instead of fully hidden until hover.
+          - Scrollbars are hidden everywhere for a cleaner look.
+          - Toast messages ("Added to Favourites", etc.) now float as plain text above the world bar instead of a boxed card in the corner.
+
+          ## Performance
+          - Capped the folder-listing cache at 40 entries (it grew unbounded before).
+          - Reduced blur radius on the always-visible top bar, world bar, and selection bar — blur is one of the more GPU/CPU-expensive things a compositor does, and these repaint continuously while scrolling.
+          - Disabled Electron's spellcheck engine, unused in a file manager.
+          EOF
+          gh release edit v1.1.2 --repo "${{ github.repository }}" --notes-file notes.md
+
+      - name: v1.2.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## New: Standby Mode
+          When the window sits unfocused for 45 seconds, it suspends to a "Taking a Power Nap" screen. Because all real state already lives in localStorage, this lets the heavy renderer's memory (DOM, cached thumbnails, JS heap) get released back to Windows while the app is idle in the background — rather than just sitting there using RAM.
+
+          - Click, press Enter, or simply refocus the window to wake it — the real app reloads instantly and looks exactly as you left it.
+          - Won't suspend mid-upload, with a modal/command palette/PC browser open, or with unsaved text-editor changes.
+          EOF
+          gh release edit v1.2.0 --repo "${{ github.repository }}" --notes-file notes.md
+
+      - name: v1.3.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## Fixes
+          - Star/move icons weren't centering in their circular buttons (a unicode-glyph font-metrics issue) — replaced with proper SVG icons.
+          - Large folders (hundreds of files) could show a brief black flash when opened — the view now builds off-screen and swaps in atomically.
+          - Hardened Escape-closes-preview handling.
+
+          ## New behavior
+          - `.exe` files run directly on open instead of trying to preview them.
+          - `.zip` files extract on open (via Windows' built-in Expand-Archive, no bundled library).
+
+          ## Full-screen previews
+          Image, video, audio, text, and PDF previews now take over the whole window instead of a narrow side panel:
+          - Images get real prev/next navigation — click the arrows or use the left/right keys to flip through every image in the folder.
+          - PDF uses Chromium's built-in full-screen viewer.
+          EOF
+          gh release edit v1.3.0 --repo "${{ github.repository }}" --notes-file notes.md
+
+      - name: v1.4.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## Visual language
+          - Favourited cards get a gold border so they actually stand out instead of blending in.
+          - Files get a subtle color-coded left edge by type — PDF, image, audio, zip, text, video, exe, link, and Google Doc all get their own accent, so you can tell what something is before reading the name.
+          - Dragging a card now has a lifted/spring feel; drop targets (folders, world tabs, and breadcrumb segments) bounce on hover instead of a flat highlight.
+          - Preview now slides up from the bottom instead of in from the side.
+
+          ## Fixes
+          - Fixed a real double-counted top offset that was eating space above the search bar (the custom titlebar was reserving space twice).
+          - Breadcrumb segments now jump to that folder on click — they used to just copy the current path to the clipboard regardless of which part you clicked.
+          - The keyboard-shortcut number badge on cards no longer overlaps the favourite star.
+
+          ## New behavior
+          - Zip extraction shows an animated progress row (like uploads) and jumps into the extracted folder afterward, instead of just refreshing the current view.
+          - Clicking a card's title text renames it directly.
+          - The blank avatar/account button now shows a visible icon.
+          - Search placeholder is now "Better Search…".
+          EOF
+          gh release edit v1.4.0 --repo "${{ github.repository }}" --notes-file notes.md
