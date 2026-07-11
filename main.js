@@ -56,7 +56,7 @@ function createWindow() {
     width: 1440, height: 920,
     frame: false, fullscreen: true, resizable: false, backgroundColor: '#0A0A09', show: false,
     icon: path.join(__dirname, 'icons', 'icon-512.png'),
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: true },
   });
   win.once('ready-to-show', () => win.show());
   win.loadFile('index.html');
@@ -92,6 +92,41 @@ ipcMain.handle('fs:fileIcon', async (e, targetPath) => {
     return img.toDataURL();
   } catch (err) { return null; }
 });
+
+/* ---------- Windows' own "Recent" list — the .lnk shortcuts Explorer/Office/etc.
+   already drop into %AppData%/Microsoft/Windows/Recent every time any app opens a
+   file. Resolving them via the WScript.Shell COM object (through PowerShell) needs
+   no compiled addon and gives genuine system-wide recent files, not just ones opened
+   through BetterDrive itself. ---------- */
+ipcMain.handle('fs:recentFiles', () => new Promise((resolve) => {
+  if (process.platform !== 'win32') return resolve([]);
+  const recentDir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Recent');
+  const psScript = [
+    '$sh = New-Object -ComObject WScript.Shell',
+    `$items = @(Get-ChildItem -LiteralPath '${recentDir.replace(/'/g, "''")}' -Filter *.lnk -ErrorAction SilentlyContinue |`,
+    'Sort-Object LastWriteTime -Descending | Select-Object -First 40 | ForEach-Object {',
+    '  $t = $null; try { $t = $sh.CreateShortcut($_.FullName).TargetPath } catch {}',
+    '  [PSCustomObject]@{ target = $t; mtime = $_.LastWriteTime.ToString("o") }',
+    '})',
+    '$items | ConvertTo-Json -Compress',
+  ].join('\n');
+  execFile('powershell', ['-NoProfile', '-Command', psScript], { timeout: 8000 }, async (err, stdout) => {
+    if (err) return resolve([]);
+    let rows;
+    try { rows = JSON.parse(stdout || '[]'); if (!Array.isArray(rows)) rows = [rows]; } catch (parseErr) { return resolve([]); }
+    const out = [];
+    const seen = new Set();
+    for (const r of rows) {
+      if (!r.target || seen.has(r.target)) continue;
+      seen.add(r.target);
+      try {
+        const st = await fsp.stat(r.target);
+        out.push({ name: path.basename(r.target), path: r.target, isDir: st.isDirectory(), size: st.size, mtimeMs: st.mtimeMs, mime: st.isDirectory() ? null : guessMime(r.target) });
+      } catch (statErr) { /* target since moved/deleted — skip */ }
+    }
+    resolve(out);
+  });
+}));
 
 ipcMain.handle('fs:list', async (e, dirPath) => {
   await ensureDir(dirPath);
@@ -232,7 +267,7 @@ ipcMain.handle('fs:watchDir', (e, dirPath) => {
       watchDebounce = setTimeout(async () => {
         if (!win || win.isDestroyed()) return;
         let sig;
-        try { sig = (await fsp.readdir(dirPath)).sort().join(' '); } catch (err) { sig = null; }
+        try { sig = (await fsp.readdir(dirPath)).sort().join('\u0000'); } catch (err) { sig = null; }
         if (sig === lastWatchSig) return;
         lastWatchSig = sig;
         win.webContents.send('fs:changed', dirPath);

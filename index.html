@@ -34,7 +34,8 @@
   --zonebar-h:76px;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{scrollbar-color:rgba(234,228,214,.18) transparent}
+html{scrollbar-width:none}
+*{scrollbar-width:none}
 body{
   background:var(--bg);
   color:var(--cream);
@@ -54,10 +55,7 @@ body::after{
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
 }
 ::selection{background:rgba(234,228,214,.2)}
-::-webkit-scrollbar{width:9px;height:9px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(234,228,214,.12);border-radius:99px;border:2px solid var(--bg)}
-::-webkit-scrollbar-thumb:hover{background:rgba(234,228,214,.22)}
+::-webkit-scrollbar{display:none;width:0;height:0}
 button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer}
 input{font-family:inherit;color:inherit}
 :focus{outline:none}
@@ -126,7 +124,7 @@ input{font-family:inherit;color:inherit}
   display:flex;align-items:center;gap:22px;
   padding:20px clamp(20px,4vw,56px);
   background:linear-gradient(to bottom,rgba(10,10,9,.92),rgba(10,10,9,.75) 70%,transparent);
-  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
 .wordmark{font-family:var(--mono);font-size:12px;letter-spacing:.3em;text-transform:uppercase;white-space:nowrap;display:flex;align-items:center;gap:10px;color:var(--cream)}
 .wordmark .star{color:var(--dim);font-size:14px}
@@ -286,17 +284,23 @@ input{font-family:inherit;color:inherit}
 .card .check{
   position:absolute;top:14px;right:14px;width:24px;height:24px;border-radius:50%;
   border:1px solid var(--faint-2);background:rgba(10,10,9,.55);display:flex;align-items:center;justify-content:center;
-  font-size:11px;color:transparent;opacity:0;transition:all .25s var(--ease);z-index:3;
+  font-size:11px;color:transparent;opacity:.35;transition:all .25s var(--ease);z-index:3;
 }
 .card:hover .check,body.selectmode .check{opacity:1}
 .card.selected .check{background:var(--cream);color:#0c0c0a;border-color:var(--cream);opacity:1}
 .card .fav{
   position:absolute;top:14px;right:46px;width:24px;height:24px;border-radius:50%;
   border:1px solid var(--faint-2);background:rgba(10,10,9,.55);display:flex;align-items:center;justify-content:center;
-  font-size:11px;color:transparent;opacity:0;transition:all .25s var(--ease);z-index:3;
+  font-size:11px;color:var(--dim);opacity:.35;transition:all .25s var(--ease);z-index:3;
 }
 .card:hover .fav,.card .fav.active{opacity:1}
 .card .fav.active{color:#e8c766;border-color:rgba(232,199,102,.5)}
+.card .move{
+  position:absolute;top:14px;right:78px;width:24px;height:24px;border-radius:50%;
+  border:1px solid var(--faint-2);background:rgba(10,10,9,.55);display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:var(--dim);opacity:.35;transition:all .25s var(--ease);z-index:3;
+}
+.card:hover .move{opacity:1;color:var(--cream)}
 .card .foldericon{width:22px;height:22px;color:var(--dim);display:block;margin-bottom:16px}
 .card .more{
   position:absolute;bottom:14px;right:12px;padding:8px 12px;color:var(--dim);border-radius:2px;
@@ -338,7 +342,7 @@ body.kbrowse .znum{opacity:.18}
   position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:50;
   display:flex;align-items:center;justify-content:center;gap:4px;max-width:min(92vw,900px);
   background:rgba(18,18,16,.68);border:1px solid rgba(234,228,214,.16);border-radius:999px;
-  padding:9px 12px;backdrop-filter:blur(26px) saturate(1.4);-webkit-backdrop-filter:blur(26px) saturate(1.4);
+  padding:9px 12px;backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);
   box-shadow:0 28px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
   overflow-x:auto;scrollbar-width:none;animation:riseCenterX .7s var(--ease) .2s both;
 }
@@ -361,7 +365,7 @@ body.kbrowse .znum{opacity:.18}
   position:fixed;bottom:calc(var(--zonebar-h) + 34px);left:50%;transform:translateX(-50%) translateY(20px);
   z-index:49;display:flex;align-items:center;gap:6px;opacity:0;pointer-events:none;
   background:rgba(20,20,18,.85);border:1px solid var(--faint-2);border-radius:5px;padding:7px 9px;
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 18px 50px rgba(0,0,0,.5);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 18px 50px rgba(0,0,0,.5);
   transition:all .35s var(--ease);
 }
 #selectbar.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
@@ -438,13 +442,15 @@ body.kbrowse .znum{opacity:.18}
 #modal .mlist button:hover{color:var(--cream);border-color:var(--faint-2);background:rgba(234,228,214,.04);text-shadow:0 0 16px var(--glow)}
 
 /* ============ TOAST + UPLOADS ============ */
-#toasts{position:fixed;left:24px;bottom:24px;z-index:90;display:flex;flex-direction:column;gap:10px;max-width:min(380px,80vw)}
-.toast{
-  background:rgba(22,22,20,.92);border:1px solid var(--faint-2);border-radius:3px;padding:14px 18px;
-  font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--cream);
-  backdrop-filter:blur(16px);animation:rise .4s var(--ease) both;box-shadow:0 16px 40px rgba(0,0,0,.5);
+#toasts{
+  position:fixed;left:50%;bottom:calc(var(--zonebar-h) + 80px);transform:translateX(-50%);z-index:90;
+  display:flex;flex-direction:column;align-items:center;gap:8px;max-width:min(380px,80vw);pointer-events:none;
 }
-.toast.err{border-color:rgba(201,111,94,.4);color:var(--danger)}
+.toast{
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--cream);
+  text-shadow:0 2px 10px rgba(0,0,0,.7);animation:rise .4s var(--ease) both;
+}
+.toast.err{color:var(--danger)}
 
 #uploads{position:fixed;right:24px;bottom:calc(var(--zonebar-h) + 40px);z-index:60;width:min(330px,86vw);display:flex;flex-direction:column;gap:8px}
 .up-item{background:rgba(20,20,18,.92);border:1px solid var(--faint-2);border-radius:3px;padding:13px 16px;backdrop-filter:blur(16px);animation:rise .35s var(--ease) both}
@@ -501,19 +507,6 @@ body.kbrowse .znum{opacity:.18}
 }
 .help-grid span{font-size:13px;color:rgba(234,228,214,.75);align-self:center}
 
-/* ============ RECENTS ============ */
-.recent-row{
-  display:flex;align-items:center;gap:14px;padding:13px 18px;border:1px solid var(--faint);border-radius:3px;
-  background:var(--card);cursor:pointer;transition:all .25s var(--ease);
-  animation:rise .45s var(--ease) both;animation-delay:calc(var(--i,0)*35ms);
-}
-.recent-row:hover{background:var(--card-hi);border-color:var(--faint-2)}
-.recent-row .rn{font-family:var(--serif);font-size:17px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.recent-row:hover .rn{text-shadow:0 0 16px var(--glow)}
-.recent-row .rt{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
-.recent-row .fav{position:static;opacity:.5;flex-shrink:0}
-.recent-row:hover .fav,.recent-row .fav.active{opacity:1}
-.recents-stack{display:flex;flex-direction:column;gap:8px}
 
 .pv-path{
   width:100%;font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.04em;cursor:pointer;
@@ -756,6 +749,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const FAVOURITES_ID = '__favourites__';
+const RECENT_ID = '__recent__';
 const FIELDS = 'files(id,name,mimeType,size,modifiedTime,createdTime,thumbnailLink,webViewLink,iconLink,parents,appProperties)';
 const LS = {
   get(k,d){ try{ const v = localStorage.getItem('bd_'+k); return v===null?d:JSON.parse(v);}catch(e){return d} },
@@ -871,7 +865,15 @@ function toggleFavourite(f){
   if(zone()?.type==='favourites'){ delete S.cache[FAVOURITES_ID]; loadCurrent(); }
   toast(i>=0?'Removed from Favourites':'Added to Favourites');
 }
-function persistCache(){ LS.set('cache',S.cache); LS.set('meta',S.meta); }
+const CACHE_CAP = 40;
+function persistCache(){
+  const keys=Object.keys(S.cache);
+  if(keys.length>CACHE_CAP){
+    const evict=keys.sort((a,b)=> (S.cache[a].ts||0)-(S.cache[b].ts||0)).slice(0, keys.length-CACHE_CAP);
+    evict.forEach(k=> delete S.cache[k]);
+  }
+  LS.set('cache',S.cache); LS.set('meta',S.meta);
+}
 function uid(){ return Math.random().toString(36).slice(2,9); }
 
 /* ---------------- auth ---------------- */
@@ -933,9 +935,24 @@ async function driveListChildren(folderId){
 }
 function listChildren(folderId){
   if(folderId===FAVOURITES_ID) return favouritesList();
+  if(folderId===RECENT_ID) return recentList();
   return isLocalId(folderId) ? localList(folderId) : driveListChildren(folderId);
 }
 function favouritesList(){ return Promise.resolve(S.favourites.map(f=>({...f}))); }
+/* Recent = Windows' own Recent Items (.lnk shortcuts Explorer/Office/etc. already drop
+   for you) merged with files opened through BetterDrive itself, deduped, newest first. */
+async function recentList(){
+  const native = IS_ELECTRON ? await window.localFS.recentFiles().catch(()=>[]) : [];
+  const nativeItems = native.map(e=> localToItem(e, path_dirname(e.path)));
+  const appItems = S.recents.map(r=> ({
+    id:r.id, name:r.name, mimeType:r.mimeType||(r.folder?FOLDER_MIME:'application/octet-stream'),
+    size:0, modifiedTime:new Date(r.ts).toISOString(), parents:r.parents||[], _local:r._local,
+    webViewLink:r.web, appProperties:r.app,
+  }));
+  const seen=new Set(); const merged=[];
+  for(const it of [...nativeItems, ...appItems]){ if(seen.has(it.id)) continue; seen.add(it.id); merged.push(it); }
+  return merged.sort((a,b)=> new Date(b.modifiedTime)-new Date(a.modifiedTime)).slice(0,40);
+}
 async function createFolder(name, parentId){
   if(isLocalId(parentId)){ const p=await window.localFS.mkdir(parentId,name); return {id:p,name,mimeType:FOLDER_MIME,modifiedTime:new Date().toISOString(),parents:[parentId]}; }
   return drv('/files?fields=id,name,mimeType,modifiedTime,parents',{
@@ -1036,9 +1053,9 @@ async function seedZones(){
 async function rescanLocalWorlds(){
   S.localRoot = await window.localFS.root();
   const OS_DEFS = [
-    {key:'documents', name:'Documents'},
-    {key:'pictures', name:'Pictures'},
     {key:'downloads', name:'Downloads'},
+    {key:'pictures', name:'Pictures'},
+    {key:'documents', name:'Documents'},
   ];
   const special = await window.localFS.specialFolders();
   const osZones = OS_DEFS.map(o=>{
@@ -1046,9 +1063,10 @@ async function rescanLocalWorlds(){
     const localPath = special[o.key];
     return existing ? {...existing, localPath} : {id:uid(), name:o.name, type:'local', localPath, osKey:o.key, protected:true};
   });
+  const recent = S.zones.find(z=>z.type==='recent') || {id:uid(), name:'Recent', type:'recent', protected:true};
   const favourites = S.zones.find(z=>z.type==='favourites') || {id:uid(), name:'Favourites', type:'favourites', protected:true};
 
-  S.zones = [...osZones, favourites];
+  S.zones = [recent, favourites, ...osZones];
   if(!S.activeZoneId || !S.zones.find(z=>z.id===S.activeZoneId)) S.activeZoneId = S.zones[0]?.id||null;
   persistCore();
 }
@@ -1153,26 +1171,6 @@ function renderStage(animate=true){
   S.displayOrder = [...folders, ...files];
   let i=0, num=0;
 
-  /* "Jump back in" — recents for this world, shown at root only */
-  if(atZoneRoot()){
-    const recs=S.recents.filter(r=>r.zoneId===S.activeZoneId && r.id!==currentFolderId()).slice(0,5);
-    if(recs.length){
-      const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Jump back in'; stage.appendChild(lbl);
-      const wrap=document.createElement('div'); wrap.className='recents-stack';
-      recs.forEach((r,ri)=>{
-        const row=document.createElement('div'); row.className='recent-row'; row.style.setProperty('--i',ri);
-        row.innerHTML=`<span class="rt">${r.folder?'DIR':(r.mimeType||'').startsWith('audio')?'AUD':(r.mimeType||'').startsWith('image')?'IMG':'FILE'}</span>
-          <span class="rn">${esc(r.name)}</span>
-          <button class="fav recent-fav${isFavourited(r.id)?' active':''}">★</button>
-          <span class="rt">${timeAgo(new Date(r.ts).toISOString()).toUpperCase()}</span>`;
-        row.querySelector('.recent-fav').onclick=e=>{ e.stopPropagation(); toggleFavourite(r); e.currentTarget.classList.toggle('active', isFavourited(r.id)); };
-        row.onclick=()=> openRecent(r);
-        wrap.appendChild(row);
-      });
-      stage.appendChild(wrap);
-    }
-  }
-
   if(folders.length){
     const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Folders'; stage.appendChild(lbl);
     const g=document.createElement('div'); g.className='grid-folders';
@@ -1204,6 +1202,7 @@ function folderCard(f, i, num){
   el.innerHTML = `
     ${num&&num<=9?`<div class="idx">${num}</div>`:''}
     <svg class="foldericon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6z"/></svg>
+    ${zone()?.type==='recent'?'<button class="move" title="Move to…">⇄</button>':''}
     <button class="fav${isFavourited(f.id)?' active':''}">★</button>
     <div class="check">✓</div>
     <div class="title">${esc(f.name)}</div>
@@ -1233,6 +1232,7 @@ function fileCard(f, i, num){
     : `<span class="typeglyph"${f._local?' data-native-icon':''}>${GLYPH[k]||'FILE'}</span>`;
   el.innerHTML = `
     ${num&&num<=9?`<div class="idx">${num}</div>`:''}
+    ${zone()?.type==='recent'?'<button class="move" title="Move to…">⇄</button>':''}
     <button class="fav${isFavourited(f.id)?' active':''}">★</button>
     <div class="check">✓</div>
     ${thumb}
@@ -1301,6 +1301,7 @@ async function openItem(f){
 function wireCard(el, f, openFn){
   el.querySelector('.check').onclick = e=>{ e.stopPropagation(); toggleSelect(f.id, el); };
   el.querySelector('.fav').onclick = e=>{ e.stopPropagation(); toggleFavourite(f); e.currentTarget.classList.toggle('active', isFavourited(f.id)); };
+  el.querySelector('.move')?.addEventListener('click', e=>{ e.stopPropagation(); moveFlow([f]); });
   el.querySelector('.more').onclick = e=>{ e.stopPropagation(); itemMenu(f, e.clientX, e.clientY); };
   el.oncontextmenu = e=>{ e.preventDefault(); itemMenu(f, e.clientX, e.clientY); };
   let lp;
@@ -1592,7 +1593,7 @@ function trashFlow(items){
     clearSelection(); delete S.cache[currentFolderId()]; await loadCurrent();
   });
 }
-function zoneRootId(z){ return z.type==='local' ? z.localPath : z.type==='favourites' ? FAVOURITES_ID : z.driveId; }
+function zoneRootId(z){ return z.type==='local' ? z.localPath : z.type==='favourites' ? FAVOURITES_ID : z.type==='recent' ? RECENT_ID : z.driveId; }
 function moveFlow(items){
   const myType = isLocalId(items[0]?.id) ? 'local' : 'drive';
   const opts=S.zones.filter(z=> (z.type||'drive')===myType && zoneRootId(z)!==currentFolderId()).map(z=>({label:z.name, id:zoneRootId(z)}));
