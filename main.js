@@ -51,6 +51,44 @@ async function safeMove(src, destDir) {
   return dest;
 }
 
+/* ---------- standby mode: when the window sits unfocused for a while, swap the
+   heavy index.html for a near-empty standby page so Chromium can release the
+   renderer's JS heap/DOM/cached thumbnails back to the OS. Waking just reloads
+   index.html — all real state already lives in localStorage, so it comes back
+   looking the same. Never suspends mid-upload, mid-modal, or with unsaved
+   text-editor changes. ---------- */
+const SUSPEND_DELAY_MS = 45000;
+const SAFETY_RECHECK_MS = 15000;
+let suspended = false;
+let suspendTimer = null;
+
+function isSafeToSuspend() {
+  return win.webContents.executeJavaScript(`
+    (function(){
+      try {
+        const uploading = (document.querySelector('#uploads')?.children.length||0) > 0;
+        const modalOpen = document.querySelector('#modal-scrim')?.classList.contains('show');
+        const paletteOpen = document.querySelector('#palette-scrim')?.classList.contains('show');
+        const pcbrowseOpen = document.querySelector('#pcbrowse-scrim')?.classList.contains('show');
+        const unsavedEdit = document.querySelector('#editor-status')?.classList.contains('dirty');
+        return !(uploading || modalOpen || paletteOpen || pcbrowseOpen || unsavedEdit);
+      } catch (e) { return true; }
+    })();
+  `).catch(() => true);
+}
+
+function scheduleSuspendCheck(delay) {
+  clearTimeout(suspendTimer);
+  suspendTimer = setTimeout(async () => {
+    if (!win || win.isDestroyed() || win.isFocused()) return;
+    const safe = await isSafeToSuspend();
+    if (!win || win.isDestroyed() || win.isFocused()) return;
+    if (!safe) { scheduleSuspendCheck(SAFETY_RECHECK_MS); return; }
+    suspended = true;
+    win.loadFile('standby.html');
+  }, delay);
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 920,
@@ -62,6 +100,11 @@ function createWindow() {
   win.loadFile('index.html');
   win.on('maximize', () => win.webContents.send('win:state', 'maximized'));
   win.on('unmaximize', () => win.webContents.send('win:state', 'normal'));
+  win.on('blur', () => { if (!suspended) scheduleSuspendCheck(SUSPEND_DELAY_MS); });
+  win.on('focus', () => {
+    clearTimeout(suspendTimer);
+    if (suspended) { suspended = false; win.loadFile('index.html'); }
+  });
 }
 
 app.whenReady().then(async () => {
