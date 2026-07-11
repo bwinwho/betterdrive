@@ -19,6 +19,11 @@
     "productName": "BetterDrive",
     "files": ["index.html", "main.js", "preload.js", "icons/**/*"],
     "directories": { "output": "dist" },
+    "publish": {
+      "provider": "github",
+      "owner": "bwinwho",
+      "repo": "betterdrive"
+    },
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
       "icon": "icons/icon.ico"
