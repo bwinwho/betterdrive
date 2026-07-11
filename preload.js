@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('localFS', {
   root: () => ipcRenderer.invoke('fs:root'),
+  specialFolders: () => ipcRenderer.invoke('fs:specialFolders'),
+  fileIcon: (targetPath) => ipcRenderer.invoke('fs:fileIcon', targetPath),
+  driveInfo: () => ipcRenderer.invoke('fs:driveInfo'),
   list: (dirPath) => ipcRenderer.invoke('fs:list', dirPath),
   mkdir: (parentPath, name) => ipcRenderer.invoke('fs:mkdir', parentPath, name),
   rename: (targetPath, newName) => ipcRenderer.invoke('fs:rename', targetPath, newName),

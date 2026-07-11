@@ -66,6 +66,7 @@ input{font-family:inherit;color:inherit}
 .hidden{display:none!important}
 
 @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes riseCenterX{from{opacity:0;transform:translateX(-50%) translateY(14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideInR{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes pulseGlow{0%,100%{text-shadow:0 0 18px rgba(246,242,230,.35)}50%{text-shadow:0 0 30px rgba(246,242,230,.6)}}
@@ -284,6 +285,7 @@ input{font-family:inherit;color:inherit}
   font-family:var(--mono);font-size:10px;letter-spacing:.25em;color:var(--dim);
   border:1px solid var(--faint);display:inline-block;padding:5px 10px;border-radius:2px;margin-bottom:16px;
 }
+.card .native-icon{width:28px;height:28px;display:block;margin-bottom:16px;image-rendering:-webkit-optimize-contrast}
 
 .card .check{
   position:absolute;top:14px;right:14px;width:24px;height:24px;border-radius:50%;
@@ -337,7 +339,7 @@ body.kbrowse .znum{opacity:.18}
   background:rgba(18,18,16,.68);border:1px solid rgba(234,228,214,.16);border-radius:999px;
   padding:9px 12px;backdrop-filter:blur(26px) saturate(1.4);-webkit-backdrop-filter:blur(26px) saturate(1.4);
   box-shadow:0 28px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
-  overflow-x:auto;scrollbar-width:none;animation:rise .7s var(--ease) .2s both;
+  overflow-x:auto;scrollbar-width:none;animation:riseCenterX .7s var(--ease) .2s both;
 }
 #zonebar::-webkit-scrollbar{display:none}
 .zone-tab{
@@ -747,6 +749,7 @@ body.electron .topbar{top:38px}
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
+const FAVOURITES_ID = '__favourites__';
 const FIELDS = 'files(id,name,mimeType,size,modifiedTime,createdTime,thumbnailLink,webViewLink,iconLink,parents,appProperties)';
 const LS = {
   get(k,d){ try{ const v = localStorage.getItem('bd_'+k); return v===null?d:JSON.parse(v);}catch(e){return d} },
@@ -775,6 +778,7 @@ const S = {
   lastItem: null,                          // last opened/clicked item — used by quick-rename ('r')
   focusId: null,                           // keyboard-focused card id (arrow navigation)
   recents: LS.get('recents', []),          // [{id,name,mimeType,_local,zoneId,folder,ts,...}]
+  favourites: LS.get('favourites', []),    // [{id,name,mimeType,_local,...}] — starred items shown in the Favourites world
   internalDrag: false,                     // true while dragging a card (suppresses OS drop overlay)
   kbNav: false,                            // navigation was keyboard-initiated → auto-focus first card
   searching: false,
@@ -852,6 +856,15 @@ const GLYPH = {image:'IMG',audio:'AUD',video:'VID',pdf:'PDF',gdoc:'DOC',archive:
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 function hostOf(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch(e){ return 'link'; } }
 function persistCore(){ LS.set('zones',S.zones); LS.set('activeZone',S.activeZoneId); LS.set('sort',S.sort); }
+function persistFavourites(){ LS.set('favourites',S.favourites); }
+function isFavourited(id){ return S.favourites.some(f=>f.id===id); }
+function toggleFavourite(f){
+  const i=S.favourites.findIndex(x=>x.id===f.id);
+  if(i>=0) S.favourites.splice(i,1); else S.favourites.push({...f});
+  persistFavourites();
+  if(zone()?.type==='favourites'){ delete S.cache[FAVOURITES_ID]; loadCurrent(); }
+  toast(i>=0?'Removed from Favourites':'Added to Favourites');
+}
 function persistCache(){ LS.set('cache',S.cache); LS.set('meta',S.meta); }
 function uid(){ return Math.random().toString(36).slice(2,9); }
 
@@ -913,8 +926,10 @@ async function driveListChildren(folderId){
   return out;
 }
 function listChildren(folderId){
+  if(folderId===FAVOURITES_ID) return favouritesList();
   return isLocalId(folderId) ? localList(folderId) : driveListChildren(folderId);
 }
+function favouritesList(){ return Promise.resolve(S.favourites.map(f=>({...f}))); }
 async function createFolder(name, parentId){
   if(isLocalId(parentId)){ const p=await window.localFS.mkdir(parentId,name); return {id:p,name,mimeType:FOLDER_MIME,modifiedTime:new Date().toISOString(),parents:[parentId]}; }
   return drv('/files?fields=id,name,mimeType,modifiedTime,parents',{
@@ -1008,25 +1023,45 @@ async function seedZones(){
   persistCore();
 }
 
-/* ---------- local worlds: rebuilt from disk every boot, not from localStorage ----------
-   This is what makes a reinstall self-healing: even with empty localStorage, scanning
-   Documents/BetterDrive finds the same subfolders and reconstructs the same worlds. */
+/* ---------- worlds: rebuilt every boot, not trusted from localStorage alone ----------
+   OS worlds (Documents/Pictures/Downloads) are live views of the real Windows folders.
+   Files is a BetterDrive-native local folder; any other subfolder a user creates under
+   Documents/BetterDrive also becomes its own local world, same as before. Favourites is
+   a virtual singleton — it never maps to a real directory. */
 async function rescanLocalWorlds(){
   S.localRoot = await window.localFS.root();
   let entries = await window.localFS.list(S.localRoot);
   let dirs = entries.filter(e=>e.isDir);
-  if(!dirs.length){
-    const defaults=['Files','Music','Videos','Design','Documents','Archive'];
-    for(const name of defaults){ try{ await window.localFS.mkdir(S.localRoot,name); }catch(e){} }
+  if(!dirs.some(d=>d.name==='Files')){
+    try{ await window.localFS.mkdir(S.localRoot,'Files'); }catch(e){}
     entries = await window.localFS.list(S.localRoot);
     dirs = entries.filter(e=>e.isDir);
   }
-  const keep = S.zones.filter(z=>z.type==='drive');
-  const rebuilt = dirs.map(d=>{
-    const existing = S.zones.find(z=>z.type==='local' && z.localPath===d.path);
-    return existing || {id:uid(), name:d.name, type:'local', localPath:d.path};
+
+  const OS_DEFS = [
+    {key:'documents', name:'Documents'},
+    {key:'pictures', name:'Pictures'},
+    {key:'downloads', name:'Downloads'},
+  ];
+  const special = await window.localFS.specialFolders();
+  const osZones = OS_DEFS.map(o=>{
+    const existing = S.zones.find(z=>z.osKey===o.key);
+    const localPath = special[o.key];
+    return existing ? {...existing, localPath} : {id:uid(), name:o.name, type:'local', localPath, osKey:o.key, protected:true};
   });
-  S.zones = [...rebuilt, ...keep];
+
+  const toLocalZone = d=>{
+    const existing = S.zones.find(z=>z.type==='local' && !z.osKey && z.localPath===d.path);
+    return existing || {id:uid(), name:d.name, type:'local', localPath:d.path};
+  };
+  const filesDir = dirs.find(d=>d.name==='Files');
+  const filesZone = filesDir ? [toLocalZone(filesDir)] : [];
+  const otherLocalZones = dirs.filter(d=>d.name!=='Files').map(toLocalZone);
+
+  const favourites = S.zones.find(z=>z.type==='favourites') || {id:uid(), name:'Favourites', type:'favourites', protected:true};
+  const driveZones = S.zones.filter(z=>z.type==='drive');
+
+  S.zones = [...osZones, ...filesZone, ...otherLocalZones, favourites, ...driveZones];
   if(!S.activeZoneId || !S.zones.find(z=>z.id===S.activeZoneId)) S.activeZoneId = S.zones[0]?.id||null;
   persistCore();
 }
@@ -1103,7 +1138,9 @@ function renderZoneBar(){
     b.ondragleave=()=> b.classList.remove('drop-hint');
     b.ondrop=e=>{ if(!S.internalDrag) return; e.preventDefault(); b.classList.remove('drop-hint');
       const ids=JSON.parse(e.dataTransfer.getData('application/x-bd')||'[]');
-      dropMove((S.displayOrder||[]).filter(x=>ids.includes(x.id)), zoneRootId(z));
+      const items=(S.displayOrder||[]).filter(x=>ids.includes(x.id));
+      if(z.type==='favourites'){ items.forEach(it=>{ if(!isFavourited(it.id)) toggleFavourite(it); }); return; }
+      dropMove(items, zoneRootId(z));
     };
     let lp; b.onpointerdown=e=>{ if(e.pointerType==='touch'){ lp=setTimeout(()=>zoneMenu(z,e.clientX,e.clientY),550);} };
     b.onpointerup=b.onpointerleave=()=>clearTimeout(lp);
@@ -1211,7 +1248,7 @@ function fileCard(f, i, num){
     ? `<div class="lthumb-wrap"><img loading="lazy"></div>`
     : f.thumbnailLink && (k==='image'||k==='video'||k==='pdf'||k==='gdoc')
     ? `<img class="thumb" loading="lazy" src="${esc(f.thumbnailLink.replace(/=s\d+/,'=s640'))}" onerror="this.remove()">`
-    : `<span class="typeglyph">${GLYPH[k]||'FILE'}</span>`;
+    : `<span class="typeglyph"${f._local?' data-native-icon':''}>${GLYPH[k]||'FILE'}</span>`;
   el.innerHTML = `
     ${num&&num<=9?`<div class="idx">${num}</div>`:''}
     <div class="check">✓</div>
@@ -1224,7 +1261,27 @@ function fileCard(f, i, num){
     <button class="more">⋯</button>`;
   wireCard(el, f, ()=> openItem(f));
   if(localImg) observeThumb(el, f);
+  else if(f._local && IS_ELECTRON) observeNativeIcon(el, f);
   return el;
+}
+let iconObserver;
+function observeNativeIcon(el, f){
+  if(!iconObserver){
+    iconObserver = new IntersectionObserver((entries)=>{
+      entries.forEach(entry=>{
+        if(!entry.isIntersecting) return;
+        iconObserver.unobserve(entry.target);
+        const span = entry.target.querySelector('.typeglyph[data-native-icon]');
+        if(!span) return;
+        window.localFS.fileIcon(entry.target.dataset.id).then(dataUrl=>{
+          if(!dataUrl || !span.isConnected) return;
+          const img=document.createElement('img'); img.className='native-icon'; img.src=dataUrl;
+          span.replaceWith(img);
+        }).catch(()=>{});
+      });
+    }, {rootMargin:'200px'});
+  }
+  iconObserver.observe(el);
 }
 
 let thumbObserver=null;
@@ -1364,7 +1421,7 @@ function syncKB(){ document.body.classList.toggle('kbrowse', S.searching || !atZ
 async function openZone(zoneId){
   S.activeZoneId=zoneId; persistCore();
   const z=zone();
-  S.path=[{id: z.type==='local'? z.localPath : z.driveId, name:z.name, type:z.type||'drive'}];
+  S.path=[{id: zoneRootId(z), name:z.name, type:z.type||'drive'}];
   S.keyMode='worlds'; syncKB();
   renderZoneBar();
   await loadCurrent();
@@ -1498,6 +1555,7 @@ function itemMenu(f, x, y){
     : {label:'Open in Drive ↗', fn:()=> window.open(f.webViewLink||('https://drive.google.com/drive/folders/'+f.id),'_blank')};
   popMenu(x,y,[
     openRow, secondRow,
+    {label: isFavourited(f.id)?'★ Remove from Favourites':'☆ Add to Favourites', fn:()=> toggleFavourite(f)},
     {label:'Rename', fn:()=> renameFlow(f)},
     ...(f._local ? [
       {label:'Copy', fn:()=> clipboardCopy([f],'copy')},
@@ -1511,6 +1569,7 @@ function itemMenu(f, x, y){
   ]);
 }
 function zoneMenu(z, x, y){
+  if(z.protected){ popMenu(x,y,[{label:'This world is built-in and can’t be renamed or removed', fn:()=>{}}]); return; }
   popMenu(x,y,[
     {label:'Rename world', fn:()=> promptModal('Rename world','',z.name, async name=>{
       const oldName=z.name;
@@ -1562,6 +1621,7 @@ function listModal(title, desc, options, onPick){
 }
 /* ================= FLOWS ================= */
 function newFolderFlow(){
+  if(currentFolderId()===FAVOURITES_ID) return toast('Favourites is a virtual world — open a real world to create a folder',true);
   promptModal('New folder','Created inside '+esc(S.path[S.path.length-1].name)+'.','', async name=>{
     try{
       const f=await createFolder(name, currentFolderId());
@@ -1590,7 +1650,7 @@ function trashFlow(items){
     clearSelection(); delete S.cache[currentFolderId()]; await loadCurrent();
   });
 }
-function zoneRootId(z){ return z.type==='local' ? z.localPath : z.driveId; }
+function zoneRootId(z){ return z.type==='local' ? z.localPath : z.type==='favourites' ? FAVOURITES_ID : z.driveId; }
 function moveFlow(items){
   const myType = isLocalId(items[0]?.id) ? 'local' : 'drive';
   const opts=S.zones.filter(z=> (z.type||'drive')===myType && zoneRootId(z)!==currentFolderId()).map(z=>({label:z.name, id:zoneRootId(z)}));
@@ -1659,7 +1719,6 @@ function connectDriveFlow(onDone){
         await getToken(true);
         await loadUser();
         await ensureRoot();
-        await seedZones();
         S.driveSignedIn=true;
         renderZoneBar();
         toast('Drive connected');
@@ -1741,6 +1800,7 @@ function openPicker(cb){
 
 /* ================= UPLOADS ================= */
 function queueUploads(files, parentId){
+  if(parentId===FAVOURITES_ID) return toast('Favourites is a virtual world — open a real world to upload',true);
   uploadBatch([...(files||[])].map(f=>({file:f, parentId})), null);
 }
 function uploadRow(file, parentId){
@@ -1784,6 +1844,7 @@ function uploadBatch(items, label){
 }
 async function handleTreeUpload(entries, baseParent){
   if(!entries.length) return;
+  if(baseParent===FAVOURITES_ID) return toast('Favourites is a virtual world — open a real world to upload',true);
   const dirs=new Set();
   entries.forEach(en=>{ const parts=en.rel.split('/'); for(let i=1;i<parts.length;i++) dirs.add(parts.slice(0,i).join('/')); });
   const ordered=[...dirs].sort((a,b)=> a.split('/').length - b.split('/').length);
@@ -2307,7 +2368,7 @@ function showHelp(){
 }
 
 /* ================= PC BROWSER (import files/folders from anywhere on the PC) ================= */
-const PCB = { targetDir:null, path:[], selected:new Map() }; // selected: path -> {name,isDir}
+const PCB = { targetDir:null, path:[], selected:new Map(), driveInfo:null }; // selected: path -> {name,isDir}
 function pcbGlyph(mime){
   if(!mime) return 'FILE';
   if(mime.startsWith('image/')) return 'IMG';
@@ -2337,14 +2398,18 @@ async function pcbRender(){
   let entries;
   try{ entries = await window.localFS.listPC(cur); }catch(e){ list.innerHTML='<div class="pcb-empty">Could not read this location</div>'; return; }
   if(!entries.length){ list.innerHTML='<div class="pcb-empty">Empty folder</div>'; return; }
+  if(!cur && !PCB.driveInfo){ try{ PCB.driveInfo = await window.localFS.driveInfo(); }catch(e){ PCB.driveInfo=[]; } }
   const dirs = entries.filter(e=>e.isDir).sort((a,b)=>a.name.localeCompare(b.name));
   const files = entries.filter(e=>!e.isDir).sort((a,b)=>a.name.localeCompare(b.name));
   list.innerHTML='';
   [...dirs, ...files].forEach(e=>{
+    const dInfo = (!cur && e.isDrive) ? PCB.driveInfo?.find(d=>d.deviceId===e.path.replace(/\\$/,'')) : null;
+    const DRIVE_BADGE = {'Local Disk':'FIX','Removable':'REM','Network Drive':'NET','CD-ROM':'CD','RAM Disk':'RAM'};
+    const label = dInfo ? `${dInfo.label||'Local Disk'} (${dInfo.deviceId})` : e.name;
     const row=document.createElement('div'); row.className='pcb-row'+(PCB.selected.has(e.path)?' checked':'');
     row.innerHTML=`<div class="pcb-check">✓</div>
-      <span class="pcb-icon">${e.isDir?'DIR':pcbGlyph(e.mime)}</span>
-      <span class="pcb-name">${esc(e.name)}</span>
+      <span class="pcb-icon">${e.isDir?(dInfo?(DRIVE_BADGE[dInfo.type]||'DRV'):'DIR'):pcbGlyph(e.mime)}</span>
+      <span class="pcb-name">${esc(label)}</span>
       <span class="pcb-meta">${e.isDir?'':fmtSize(e.size)}</span>`;
     row.querySelector('.pcb-check').onclick=ev=>{ ev.stopPropagation(); pcbToggle(e, row); };
     row.onclick=()=>{ if(e.isDir) { PCB.path.push({name:e.name, path:e.path}); pcbRender(); } else pcbToggle(e, row); };

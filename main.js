@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
+const { execFile } = require('child_process');
 
 let win;
 const ROOT = path.join(app.getPath('documents'), 'BetterDrive');
@@ -78,6 +79,19 @@ ipcMain.handle('win:isMaximized', () => win.isMaximized());
 
 /* ---------- filesystem ---------- */
 ipcMain.handle('fs:root', () => ROOT);
+
+ipcMain.handle('fs:specialFolders', () => ({
+  documents: app.getPath('documents'),
+  pictures: app.getPath('pictures'),
+  downloads: app.getPath('downloads'),
+}));
+
+ipcMain.handle('fs:fileIcon', async (e, targetPath) => {
+  try {
+    const img = await app.getFileIcon(targetPath, { size: 'normal' });
+    return img.toDataURL();
+  } catch (err) { return null; }
+});
 
 ipcMain.handle('fs:list', async (e, dirPath) => {
   await ensureDir(dirPath);
@@ -215,6 +229,24 @@ ipcMain.handle('fs:watchDir', (e, dirPath) => {
   } catch (err) { /* folder may have been removed externally — ignore */ }
 });
 ipcMain.handle('fs:unwatch', () => { if (activeWatcher) { try { activeWatcher.close(); } catch (err) {} activeWatcher = null; } });
+
+/* ---------- drive labels/types (Windows only) — used to show real volume names in the PC browser ---------- */
+const DRIVE_TYPE_NAMES = { 0: 'Unknown', 1: 'No Root Dir', 2: 'Removable', 3: 'Local Disk', 4: 'Network Drive', 5: 'CD-ROM', 6: 'RAM Disk' };
+ipcMain.handle('fs:driveInfo', () => new Promise((resolve) => {
+  if (process.platform !== 'win32') return resolve([]);
+  execFile('powershell', ['-NoProfile', '-Command',
+    'Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID,VolumeName,DriveType | ConvertTo-Json'],
+    { timeout: 5000 }, (err, stdout) => {
+      if (err) return resolve([]);
+      try {
+        let rows = JSON.parse(stdout || '[]');
+        if (!Array.isArray(rows)) rows = [rows];
+        resolve(rows.map(r => ({
+          deviceId: r.DeviceID, label: r.VolumeName || '', type: DRIVE_TYPE_NAMES[r.DriveType] || 'Drive',
+        })));
+      } catch (parseErr) { resolve([]); }
+    });
+}));
 
 /* ---------- whole-PC search — common user folders + drive roots, capped so it can't hang ---------- */
 async function driveRoots() {
