@@ -53,8 +53,8 @@ async function safeMove(src, destDir) {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1440, height: 920, minWidth: 900, minHeight: 600,
-    frame: false, backgroundColor: '#0A0A09', show: false,
+    width: 1440, height: 920,
+    frame: false, fullscreen: true, resizable: false, backgroundColor: '#0A0A09', show: false,
     icon: path.join(__dirname, 'icons', 'icon-512.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
@@ -216,15 +216,27 @@ ipcMain.handle('fs:listPC', async (e, dirPath) => {
   return out;
 });
 
-/* ---------- live folder watching — so files pasted in via Explorer show up ---------- */
-let activeWatcher = null, watchedPath = null, watchDebounce = null;
+/* ---------- live folder watching — so files pasted in via Explorer show up ----------
+   Windows' underlying ReadDirectoryChangesW fires multiple raw events per single real
+   file operation, which used to cause the UI to refresh several times in a row. Beyond
+   debouncing, we compare a cheap directory-name signature and only notify the renderer
+   when something actually changed. */
+let activeWatcher = null, watchedPath = null, watchDebounce = null, lastWatchSig = null;
 ipcMain.handle('fs:watchDir', (e, dirPath) => {
   if (activeWatcher) { try { activeWatcher.close(); } catch (err) {} activeWatcher = null; }
   watchedPath = dirPath;
+  lastWatchSig = null;
   try {
     activeWatcher = fs.watch(dirPath, { persistent: false }, () => {
       clearTimeout(watchDebounce);
-      watchDebounce = setTimeout(() => { if (win && !win.isDestroyed()) win.webContents.send('fs:changed', dirPath); }, 350);
+      watchDebounce = setTimeout(async () => {
+        if (!win || win.isDestroyed()) return;
+        let sig;
+        try { sig = (await fsp.readdir(dirPath)).sort().join(' '); } catch (err) { sig = null; }
+        if (sig === lastWatchSig) return;
+        lastWatchSig = sig;
+        win.webContents.send('fs:changed', dirPath);
+      }, 400);
     });
   } catch (err) { /* folder may have been removed externally — ignore */ }
 });

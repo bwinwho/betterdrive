@@ -188,17 +188,17 @@ input{font-family:inherit;color:inherit}
 
 /* context row */
 .context{
-  display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
-  padding:18px clamp(20px,4vw,56px) 6px;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:8px clamp(20px,4vw,56px) 4px;
 }
-#backbtn{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;color:var(--dim);padding:6px 0;transition:color .3s var(--ease)}
+#backbtn{font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;color:var(--dim);padding:4px 0;transition:color .3s var(--ease)}
 #backbtn:hover{color:var(--cream)}
 #crumb{
-  font-family:var(--serif);font-size:clamp(20px,2.6vw,27px);font-weight:500;letter-spacing:.02em;
+  font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;
 }
 #crumb .dimpart{color:var(--dim)}
-#crumb .glow{text-shadow:0 0 22px rgba(246,242,230,.35)}
-.context .meta{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+#crumb .glow{text-shadow:0 0 14px rgba(246,242,230,.3)}
+.context .meta{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
 .context .spacer{flex:1}
 .iconbtn{
   font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
@@ -236,10 +236,6 @@ input{font-family:inherit;color:inherit}
 .card.kfocus .title{text-shadow:0 0 24px var(--glow)}
 .card.drop-hint{border-color:rgba(234,228,214,.6);background:var(--card-hi);box-shadow:0 0 0 1px rgba(234,228,214,.35),0 0 44px rgba(246,242,230,.1)}
 .zone-tab.drop-hint{color:var(--cream);text-shadow:0 0 18px var(--glow);background:rgba(234,228,214,.1)}
-.peek{
-  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--dim);margin-top:12px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:fadeIn .3s var(--ease) both;
-}
 .card:active{transform:translateY(-1px) scale(.995)}
 .card.selected{border-color:rgba(234,228,214,.45);background:var(--card-hi);box-shadow:0 0 0 1px rgba(234,228,214,.25),0 14px 40px rgba(0,0,0,.4)}
 
@@ -294,6 +290,14 @@ input{font-family:inherit;color:inherit}
 }
 .card:hover .check,body.selectmode .check{opacity:1}
 .card.selected .check{background:var(--cream);color:#0c0c0a;border-color:var(--cream);opacity:1}
+.card .fav{
+  position:absolute;top:14px;right:46px;width:24px;height:24px;border-radius:50%;
+  border:1px solid var(--faint-2);background:rgba(10,10,9,.55);display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:transparent;opacity:0;transition:all .25s var(--ease);z-index:3;
+}
+.card:hover .fav,.card .fav.active{opacity:1}
+.card .fav.active{color:#e8c766;border-color:rgba(232,199,102,.5)}
+.card .foldericon{width:22px;height:22px;color:var(--dim);display:block;margin-bottom:16px}
 .card .more{
   position:absolute;bottom:14px;right:12px;padding:8px 12px;color:var(--dim);border-radius:2px;
   font-size:16px;line-height:1;letter-spacing:2px;opacity:0;transition:all .25s var(--ease);z-index:3;
@@ -301,14 +305,6 @@ input{font-family:inherit;color:inherit}
 .card:hover .more{opacity:1}
 .card .more:hover{color:var(--cream);background:rgba(234,228,214,.07)}
 
-.card.action{
-  border-style:dashed;border-color:rgba(234,228,214,.22);background:transparent;
-  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:10px;min-height:160px;
-}
-.card.action:hover{background:rgba(234,228,214,.03);box-shadow:none}
-.card.action .plus{font-family:var(--serif);font-size:34px;color:var(--dim);line-height:1;transition:all .3s var(--ease)}
-.card.action:hover .plus{color:var(--cream);text-shadow:0 0 20px var(--glow)}
-.card.action .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--dim)}
 
 .card .idx{
   position:absolute;top:14px;right:48px;z-index:3;
@@ -331,6 +327,11 @@ body.kbrowse .znum{opacity:.18}
 .sk{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--faint);border-radius:4px;height:170px;animation:fadeIn .4s both}
 .sk::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(234,228,214,.05) 50%,transparent 70%);transform:translateX(-100%);animation:shimmer 1.6s infinite}
 @keyframes shimmer{to{transform:translateX(100%)}}
+
+#bottom-scrim{
+  position:fixed;left:0;right:0;bottom:0;height:140px;z-index:45;pointer-events:none;
+  background:linear-gradient(to top,rgba(10,10,9,.95),rgba(10,10,9,.6) 55%,transparent);
+}
 
 /* ============ ZONE BAR ============ */
 #zonebar{
@@ -402,7 +403,7 @@ body.kbrowse .znum{opacity:.18}
 .editor-status.dirty{color:var(--cream)}
 .pv-body .loading{font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:var(--dim);text-transform:uppercase;animation:pulseGlow 2s infinite}
 .pv-actions{display:flex;gap:8px;padding:0 28px 28px;flex-wrap:wrap}
-.pv-actions .iconbtn{flex:1;text-align:center;min-width:100px}
+.pv-actions .iconbtn{flex:1 1 calc(50% - 4px);text-align:center;min-width:100px;white-space:normal;line-height:1.4}
 
 /* audio player */
 .player{width:100%;padding:38px 30px;display:flex;flex-direction:column;gap:26px;align-items:center}
@@ -510,6 +511,8 @@ body.kbrowse .znum{opacity:.18}
 .recent-row .rn{font-family:var(--serif);font-size:17px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .recent-row:hover .rn{text-shadow:0 0 16px var(--glow)}
 .recent-row .rt{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+.recent-row .fav{position:static;opacity:.5;flex-shrink:0}
+.recent-row:hover .fav,.recent-row .fav.active{opacity:1}
 .recents-stack{display:flex;flex-direction:column;gap:8px}
 
 .pv-path{
@@ -574,6 +577,8 @@ body.electron #titlebar{display:flex}
 #titlebar .tb-btn.tb-close:hover{background:#C96F5E;color:#0c0c0a}
 #titlebar svg{width:11px;height:11px}
 body.electron .topbar{top:38px}
+body.electron #preview{top:38px}
+body.electron .wordmark{display:none}
 
 @media(max-width:640px){
   .topbar{flex-wrap:wrap;gap:12px}
@@ -664,12 +669,13 @@ body.electron .topbar{top:38px}
     <div id="crumb"></div>
     <div class="meta" id="crumb-meta"></div>
     <div class="spacer"></div>
-    <button class="iconbtn" id="btn-newfolder">+ Folder</button>
-    <button class="iconbtn" id="btn-upload">↑ Upload</button>
+    <button class="iconbtn" id="btn-add">+ Add</button>
+    <button class="iconbtn" id="btn-link">🔗 Link</button>
   </div>
 
   <main id="stage"></main>
 
+  <div id="bottom-scrim"></div>
   <nav id="zonebar"></nav>
 
   <div id="selectbar">
@@ -1023,21 +1029,12 @@ async function seedZones(){
   persistCore();
 }
 
-/* ---------- worlds: rebuilt every boot, not trusted from localStorage alone ----------
-   OS worlds (Documents/Pictures/Downloads) are live views of the real Windows folders.
-   Files is a BetterDrive-native local folder; any other subfolder a user creates under
-   Documents/BetterDrive also becomes its own local world, same as before. Favourites is
-   a virtual singleton — it never maps to a real directory. */
+/* ---------- worlds: exactly four, fixed, rebuilt every boot ----------
+   Documents/Pictures/Downloads are live views of the real Windows folders.
+   Favourites is a virtual singleton — it never maps to a real directory.
+   There is no way to add, rename, or remove a world in the desktop app. */
 async function rescanLocalWorlds(){
   S.localRoot = await window.localFS.root();
-  let entries = await window.localFS.list(S.localRoot);
-  let dirs = entries.filter(e=>e.isDir);
-  if(!dirs.some(d=>d.name==='Files')){
-    try{ await window.localFS.mkdir(S.localRoot,'Files'); }catch(e){}
-    entries = await window.localFS.list(S.localRoot);
-    dirs = entries.filter(e=>e.isDir);
-  }
-
   const OS_DEFS = [
     {key:'documents', name:'Documents'},
     {key:'pictures', name:'Pictures'},
@@ -1049,19 +1046,9 @@ async function rescanLocalWorlds(){
     const localPath = special[o.key];
     return existing ? {...existing, localPath} : {id:uid(), name:o.name, type:'local', localPath, osKey:o.key, protected:true};
   });
-
-  const toLocalZone = d=>{
-    const existing = S.zones.find(z=>z.type==='local' && !z.osKey && z.localPath===d.path);
-    return existing || {id:uid(), name:d.name, type:'local', localPath:d.path};
-  };
-  const filesDir = dirs.find(d=>d.name==='Files');
-  const filesZone = filesDir ? [toLocalZone(filesDir)] : [];
-  const otherLocalZones = dirs.filter(d=>d.name!=='Files').map(toLocalZone);
-
   const favourites = S.zones.find(z=>z.type==='favourites') || {id:uid(), name:'Favourites', type:'favourites', protected:true};
-  const driveZones = S.zones.filter(z=>z.type==='drive');
 
-  S.zones = [...osZones, ...filesZone, ...otherLocalZones, favourites, ...driveZones];
+  S.zones = [...osZones, favourites];
   if(!S.activeZoneId || !S.zones.find(z=>z.id===S.activeZoneId)) S.activeZoneId = S.zones[0]?.id||null;
   persistCore();
 }
@@ -1133,7 +1120,6 @@ function renderZoneBar(){
     b.className='zone-tab'+(z.id===S.activeZoneId?' active':'');
     b.innerHTML=(zi<9?`<span class="znum">${zi+1}</span>`:'')+esc(z.name);
     b.onclick=()=> openZone(z.id);
-    b.oncontextmenu=e=>{ e.preventDefault(); zoneMenu(z, e.clientX, e.clientY); };
     b.ondragover=e=>{ if(!S.internalDrag) return; e.preventDefault(); e.dataTransfer.dropEffect='move'; b.classList.add('drop-hint'); };
     b.ondragleave=()=> b.classList.remove('drop-hint');
     b.ondrop=e=>{ if(!S.internalDrag) return; e.preventDefault(); b.classList.remove('drop-hint');
@@ -1142,12 +1128,8 @@ function renderZoneBar(){
       if(z.type==='favourites'){ items.forEach(it=>{ if(!isFavourited(it.id)) toggleFavourite(it); }); return; }
       dropMove(items, zoneRootId(z));
     };
-    let lp; b.onpointerdown=e=>{ if(e.pointerType==='touch'){ lp=setTimeout(()=>zoneMenu(z,e.clientX,e.clientY),550);} };
-    b.onpointerup=b.onpointerleave=()=>clearTimeout(lp);
     bar.appendChild(b);
   });
-  const add=document.createElement('button'); add.className='zone-add'; add.textContent='+'; add.title='New world';
-  add.onclick=addZoneFlow; bar.appendChild(add);
 }
 
 function renderCrumb(){
@@ -1173,14 +1155,17 @@ function renderStage(animate=true){
 
   /* "Jump back in" — recents for this world, shown at root only */
   if(atZoneRoot()){
-    const recs=S.recents.filter(r=>r.zoneId===S.activeZoneId && r.id!==currentFolderId()).slice(0,4);
+    const recs=S.recents.filter(r=>r.zoneId===S.activeZoneId && r.id!==currentFolderId()).slice(0,5);
     if(recs.length){
       const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Jump back in'; stage.appendChild(lbl);
       const wrap=document.createElement('div'); wrap.className='recents-stack';
       recs.forEach((r,ri)=>{
         const row=document.createElement('div'); row.className='recent-row'; row.style.setProperty('--i',ri);
         row.innerHTML=`<span class="rt">${r.folder?'DIR':(r.mimeType||'').startsWith('audio')?'AUD':(r.mimeType||'').startsWith('image')?'IMG':'FILE'}</span>
-          <span class="rn">${esc(r.name)}</span><span class="rt">${timeAgo(new Date(r.ts).toISOString()).toUpperCase()}</span>`;
+          <span class="rn">${esc(r.name)}</span>
+          <button class="fav recent-fav${isFavourited(r.id)?' active':''}">★</button>
+          <span class="rt">${timeAgo(new Date(r.ts).toISOString()).toUpperCase()}</span>`;
+        row.querySelector('.recent-fav').onclick=e=>{ e.stopPropagation(); toggleFavourite(r); e.currentTarget.classList.toggle('active', isFavourited(r.id)); };
         row.onclick=()=> openRecent(r);
         wrap.appendChild(row);
       });
@@ -1188,15 +1173,10 @@ function renderStage(animate=true){
     }
   }
 
-  if(folders.length || atZoneRoot()){
+  if(folders.length){
     const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Folders'; stage.appendChild(lbl);
     const g=document.createElement('div'); g.className='grid-folders';
     folders.forEach(f=> g.appendChild(folderCard(f, i++, ++num)));
-    if(atZoneRoot()){
-      g.appendChild(actionCard('+','New folder', i++, ()=> newFolderFlow()));
-      g.appendChild(actionCard('⇗','New link', i++, ()=> newLinkFlow()));
-      if(IS_ELECTRON && isLocalId(currentFolderId())) g.appendChild(actionCard('⊞','Browse PC…', i++, ()=> openPCBrowser(currentFolderId())));
-    }
     stage.appendChild(g);
   }
   if(files.length){
@@ -1205,7 +1185,7 @@ function renderStage(animate=true){
     files.forEach(f=> g.appendChild(fileCard(f, i++, ++num)));
     stage.appendChild(g);
   }
-  if(!folders.length && !files.length && !atZoneRoot()){
+  if(!folders.length && !files.length){
     stage.innerHTML += `<div class="empty"><div class="big">Nothing here yet</div><p>Drop files anywhere to upload</p></div>`;
   }
   /* keyboard focus: restore if the item survived, or land on first card after kb navigation */
@@ -1223,6 +1203,8 @@ function folderCard(f, i, num){
   const m=S.meta[f.id];
   el.innerHTML = `
     ${num&&num<=9?`<div class="idx">${num}</div>`:''}
+    <svg class="foldericon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6z"/></svg>
+    <button class="fav${isFavourited(f.id)?' active':''}">★</button>
     <div class="check">✓</div>
     <div class="title">${esc(f.name)}</div>
     <div class="meta">
@@ -1251,6 +1233,7 @@ function fileCard(f, i, num){
     : `<span class="typeglyph"${f._local?' data-native-icon':''}>${GLYPH[k]||'FILE'}</span>`;
   el.innerHTML = `
     ${num&&num<=9?`<div class="idx">${num}</div>`:''}
+    <button class="fav${isFavourited(f.id)?' active':''}">★</button>
     <div class="check">✓</div>
     ${thumb}
     <div class="title">${esc(displayName(f))}</div>
@@ -1295,7 +1278,7 @@ function observeThumb(el, f){
         if(!img) return;
         img.onload=()=> img.classList.add('loaded');
         img.onerror=()=> entry.target.querySelector('.lthumb-wrap')?.remove();
-        img.src = toFileUrl(f.id);
+        img.src = toFileUrl(entry.target.dataset.id);
       });
     }, {rootMargin:'200px'});
   }
@@ -1315,15 +1298,9 @@ async function openItem(f){
   openPreview(f);
 }
 
-function actionCard(plus,label,i,onClick){
-  const el=document.createElement('div');
-  el.className='card action'; el.style.setProperty('--i', Math.min(i,10));
-  el.innerHTML=`<div class="plus">${plus}</div><div class="lbl">${label}</div>`;
-  el.onclick=onClick; return el;
-}
-
 function wireCard(el, f, openFn){
   el.querySelector('.check').onclick = e=>{ e.stopPropagation(); toggleSelect(f.id, el); };
+  el.querySelector('.fav').onclick = e=>{ e.stopPropagation(); toggleFavourite(f); e.currentTarget.classList.toggle('active', isFavourited(f.id)); };
   el.querySelector('.more').onclick = e=>{ e.stopPropagation(); itemMenu(f, e.clientX, e.clientY); };
   el.oncontextmenu = e=>{ e.preventDefault(); itemMenu(f, e.clientX, e.clientY); };
   let lp;
@@ -1348,18 +1325,6 @@ function wireCard(el, f, openFn){
       const ids=JSON.parse(e.dataTransfer.getData('application/x-bd')||'[]');
       dropMove((S.displayOrder||[]).filter(x=>ids.includes(x.id) && x.id!==f.id), f.id);
     };
-    /* peek: after a beat of hovering, whisper the folder's contents from cache */
-    let peekT;
-    el.addEventListener('pointerenter', ()=>{
-      peekT=setTimeout(()=>{
-        const c=S.cache[f.id];
-        if(!c?.files?.length || el.querySelector('.peek')) return;
-        const div=document.createElement('div'); div.className='peek';
-        div.textContent='› '+c.files.slice(0,4).map(x=>displayName(x)).join('  ·  ')+(c.files.length>4?'  …':'');
-        el.appendChild(div);
-      }, 480);
-    });
-    el.addEventListener('pointerleave', ()=>{ clearTimeout(peekT); el.querySelector('.peek')?.remove(); });
   }
 }
 
@@ -1568,29 +1533,6 @@ function itemMenu(f, x, y){
     {label:'Move to trash', fn:()=> trashFlow([f]), danger:true},
   ]);
 }
-function zoneMenu(z, x, y){
-  if(z.protected){ popMenu(x,y,[{label:'This world is built-in and can’t be renamed or removed', fn:()=>{}}]); return; }
-  popMenu(x,y,[
-    {label:'Rename world', fn:()=> promptModal('Rename world','',z.name, async name=>{
-      const oldName=z.name;
-      z.name=name; persistCore(); renderZoneBar(); if(z.id===S.activeZoneId){ S.path[0].name=name; renderCrumb(); }
-      try{
-        if(z.type==='local'){ const p=await window.localFS.rename(z.localPath,name); z.localPath=p; if(z.id===S.activeZoneId) S.path[0].id=p; }
-        else if(!z.isLinkedRoot){ await renameItem(z.driveId,name); }
-        persistCore();
-        toast('World renamed');
-      }catch(e){ z.name=oldName; persistCore(); renderZoneBar(); if(z.id===S.activeZoneId){ S.path[0].name=oldName; renderCrumb(); } toast(e.message||'Rename failed — name may already exist',true); }
-    })},
-    {label:'Remove world', fn:()=> confirmModal('Remove world?','Removes "'+esc(z.name)+'" from BetterDrive only. The '+(z.type==='local'?'folder on disk stays':'Drive folder and its files stay')+' untouched.', ()=>{
-      S.zones=S.zones.filter(x=>x.id!==z.id);
-      if(S.activeZoneId===z.id) S.activeZoneId=S.zones[0]?.id||null;
-      persistCore(); renderZoneBar();
-      if(S.activeZoneId) openZone(S.activeZoneId); else $('#stage').innerHTML='';
-      toast('World removed');
-    }), danger:true},
-  ]);
-}
-
 function modal(html){ $('#modal').innerHTML=html; $('#modal-scrim').classList.add('show'); }
 function closeModal(){ $('#modal-scrim').classList.remove('show'); }
 $('#modal-scrim').addEventListener('click', e=>{ if(e.target.id==='modal-scrim') closeModal(); });
@@ -1675,84 +1617,6 @@ async function downloadFlow(f){
     setTimeout(()=>URL.revokeObjectURL(a.href), 6000);
   }catch(e){ toast(e.message,true); }
 }
-function addZoneFlow(){
-  const opts=[{label:'＋  New local world', mode:'local'}];
-  if(S.driveSignedIn) opts.push({label:'＋  New Drive world', mode:'create'}, {label:'⇲  Link a Drive folder', mode:'link'});
-  else opts.push({label:'☁  Connect Google Drive…', mode:'connect'});
-  listModal('New world','',opts, pick=>{
-    if(pick.mode==='local'){
-      promptModal('World name','Creates a folder inside Documents / BetterDrive.','', async name=>{
-        try{
-          const p=await window.localFS.mkdir(S.localRoot,name);
-          S.zones.push({id:uid(),name,type:'local',localPath:p});
-          persistCore(); renderZoneBar(); openZone(S.zones[S.zones.length-1].id);
-          toast('World created');
-        }catch(e){ toast(e.message||'Could not create — name may already exist',true); }
-      },'Create');
-    } else if(pick.mode==='connect'){
-      connectDriveFlow(()=> addZoneFlow());
-    } else if(pick.mode==='create'){
-      promptModal('World name','A matching folder is created in BetterDrive on your Drive.','', async name=>{
-        try{
-          const f=await createFolder(name,S.rootId);
-          S.zones.push({id:uid(),name,type:'drive',driveId:f.id,linked:[]});
-          persistCore(); renderZoneBar(); openZone(S.zones[S.zones.length-1].id);
-          toast('World created');
-        }catch(e){ toast(e.message,true); }
-      },'Create');
-    } else {
-      openPicker(doc=>{
-        S.zones.push({id:uid(), name:doc.name, type:'drive', driveId:doc.id, linked:[], isLinkedRoot:true});
-        persistCore(); renderZoneBar(); openZone(S.zones[S.zones.length-1].id);
-        toast('World linked from Drive');
-      });
-    }
-  });
-}
-
-/* ---------- lazy Drive connection: only asks for keys / sign-in when a Drive world is actually requested ---------- */
-function connectDriveFlow(onDone){
-  const proceed = async ()=>{
-    whenGisReady(async ()=>{
-      initTokenClient();
-      try{
-        await getToken(true);
-        await loadUser();
-        await ensureRoot();
-        S.driveSignedIn=true;
-        renderZoneBar();
-        toast('Drive connected');
-        onDone && onDone();
-      }catch(e){ toast(e.message||'Drive connection failed', true); }
-    });
-  };
-  if(S.clientId && S.apiKey) return proceed();
-  modal(`<h3>Connect Google Drive</h3><div class="mdesc">One-time setup — paste your Google Cloud keys. Ask Claude if you need the 5-step walkthrough again.</div>
-    <div class="field"><label>OAuth Client ID</label><input id="cd-client" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false" autocomplete="off"></div>
-    <div class="field"><label>API Key</label><input id="cd-key" placeholder="AIza..." spellcheck="false" autocomplete="off"></div>
-    <div class="mrow"><button class="btn" id="m-cancel">Cancel</button><button class="btn solid" id="m-ok">Connect</button></div>`);
-  $('#m-ok').onclick=()=>{
-    const c=$('#cd-client').value.trim(), k=$('#cd-key').value.trim();
-    if(!c.includes('.apps.googleusercontent.com')) return toast('Client ID looks wrong',true);
-    if(!k) return toast('API key required',true);
-    S.clientId=c; S.apiKey=k; LS.set('clientId',c); LS.set('apiKey',k);
-    closeModal(); proceed();
-  };
-  $('#m-cancel').onclick=closeModal;
-}
-function linkFolderFlow(){
-  openPicker(doc=>{
-    const z=zone();
-    z.linked=z.linked||[]; z.linkedMeta=z.linkedMeta||[];
-    if(!z.linked.includes(doc.id)){
-      z.linked.push(doc.id);
-      z.linkedMeta.push({id:doc.id,name:doc.name,mimeType:FOLDER_MIME,modifiedTime:new Date().toISOString(),parents:[]});
-      persistCore();
-    }
-    loadCurrent(); toast('Folder linked');
-  });
-}
-
 function newLinkFlow(){
   modal(`<h3>New link</h3><div class="mdesc">A card that opens any URL.${curType()==='local'?' Saved as a tiny file in this folder.':' Saved to Drive, so it syncs everywhere.'}</div>
     <div class="field"><label>Name</label><input id="ml-name" spellcheck="false" autocomplete="off"></div>
@@ -1899,11 +1763,13 @@ addEventListener('drop', e=>{ e.preventDefault(); dragDepth=0; $('#dropzone').cl
   }
 });
 
-$('#btn-upload').onclick=e=>{ e.stopPropagation();
+$('#btn-add').onclick=e=>{ e.stopPropagation();
   const r=e.currentTarget.getBoundingClientRect();
   popMenu(r.left, r.bottom+6, [
+    {label:'New folder', fn:()=> newFolderFlow()},
     {label:'Upload files', fn:()=> $('#filepick').click()},
     {label:'Upload folder', fn:()=> $('#dirpick').click()},
+    ...(IS_ELECTRON && isLocalId(currentFolderId()) ? [{label:'Browse PC…', fn:()=> openPCBrowser(currentFolderId())}] : []),
   ]);
 };
 $('#filepick').onchange=e=>{ queueUploads(e.target.files, currentFolderId()); e.target.value=''; };
@@ -1911,7 +1777,7 @@ $('#dirpick').onchange=e=>{
   const fs=[...e.target.files]; e.target.value='';
   if(fs.length) handleTreeUpload(fs.map(f=>({file:f, rel:f.webkitRelativePath||f.name})), currentFolderId());
 };
-$('#btn-newfolder').onclick=()=> newFolderFlow();
+$('#btn-link').onclick=()=> newLinkFlow();
 
 /* ================= PREVIEW ================= */
 function openPreview(f){
@@ -2144,9 +2010,6 @@ $('#avatar').onclick=e=>{ e.stopPropagation();
   if(S.driveSignedIn){
     const info=document.createElement('button'); info.innerHTML=`<span style="text-transform:none;letter-spacing:.05em">${esc(S.user?.email||'')}</span>`; info.style.pointerEvents='none';
     m.append(info);
-  } else if(IS_ELECTRON){
-    const conn=document.createElement('button'); conn.textContent='Connect Google Drive'; conn.onclick=()=>{ closeMenus(); connectDriveFlow(); };
-    m.append(conn);
   }
   if(installPrompt){
     const inst=document.createElement('button'); inst.textContent='Install app ✦';
@@ -2292,7 +2155,6 @@ function palActions(){
     ...(IS_ELECTRON && isLocalId(currentFolderId()) ? [{label:'Browse PC…', hint:'IMPORT', run:()=> openPCBrowser(currentFolderId())}] : []),
     {label:'Refresh this view', hint:'SYNC', run:()=>{ delete S.cache[currentFolderId()]; loadCurrent(); }},
     {label:'Shortcut help', hint:'?', run:()=> showHelp()},
-    ...(!S.driveSignedIn && IS_ELECTRON ? [{label:'Connect Google Drive', hint:'CLOUD', run:()=> connectDriveFlow()}] : []),
   ];
 }
 function palBuild(q){
