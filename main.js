@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, protocol, net } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -8,6 +8,31 @@ const { execFile } = require('child_process');
 
 let win;
 const ROOT = path.join(app.getPath('documents'), 'BetterDrive');
+
+/* ---------- app:// — serving our own files over a real (non-file://) scheme ----------
+   The Preview Engine (preview/engine.mjs and friends) uses real ES module
+   `import()` for lazy-loading plugins. Chromium refuses to fetch module
+   imports from a file:// origin at all (a real, confirmed restriction — it's
+   not about our code, it's Chromium treating file:// pages as origin "null"
+   and blocking any module-fetch from there, full stop). A privileged custom
+   scheme sidesteps this exactly the way most modern Electron apps do.
+   This only changes how *our own* app files (index.html, preview/*, vendor/*)
+   are served — local user files previewed via <img>/<video>/<audio> src
+   (toFileUrl() in index.html) are plain resource loads, not module fetches,
+   completely unaffected, and keep using file:// URLs exactly as before. */
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+]);
+function registerAppProtocol() {
+  protocol.handle('app', (request) => {
+    const url = new URL(request.url);
+    let pathname = decodeURIComponent(url.pathname);
+    if (pathname === '' || pathname === '/') pathname = '/index.html';
+    const filePath = path.join(__dirname, pathname);
+    if (!filePath.startsWith(__dirname)) return new Response('Forbidden', { status: 403 });
+    return net.fetch('file://' + filePath);
+  });
+}
 
 /* ---------- Google OAuth config for the Cloud world ----------
    Precedence: real env var > .env (gitignored, for local dev, see .env.example)
@@ -109,7 +134,7 @@ function scheduleSuspendCheck(delay) {
     if (!win || win.isDestroyed() || win.isFocused()) return;
     if (!safe) { scheduleSuspendCheck(SAFETY_RECHECK_MS); return; }
     suspended = true;
-    win.loadFile('standby.html');
+    win.loadURL('app://bd/standby.html');
   }, delay);
 }
 
@@ -121,7 +146,7 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: true },
   });
   win.once('ready-to-show', () => win.show());
-  win.loadFile('index.html');
+  win.loadURL('app://bd/index.html');
   /* window.open() calls (Open in Drive, saved link cards) have no explicit
      handler by default, which would pop an unhardened Electron window with no
      browser session — Google's own pages would then demand a fresh sign-in
@@ -133,11 +158,12 @@ function createWindow() {
   win.on('blur', () => { if (!suspended) scheduleSuspendCheck(SUSPEND_DELAY_MS); });
   win.on('focus', () => {
     clearTimeout(suspendTimer);
-    if (suspended) { suspended = false; win.loadFile('index.html'); }
+    if (suspended) { suspended = false; win.loadURL('app://bd/index.html'); }
   });
 }
 
 app.whenReady().then(async () => {
+  registerAppProtocol();
   await ensureDir(ROOT);
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

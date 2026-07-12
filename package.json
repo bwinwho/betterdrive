@@ -1,6 +1,6 @@
 {
   "name": "betterdrive",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "description": "Your files, rebuilt beautiful.",
   "main": "main.js",
   "author": "Bwin31 / Kode31",
@@ -8,7 +8,8 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win",
-    "build:dir": "electron-builder --win --dir"
+    "build:dir": "electron-builder --win --dir",
+    "prepare": "node scripts/vendor-libs.mjs"
   },
   "devDependencies": {
     "electron": "^31.0.0",
@@ -17,8 +18,20 @@
   "build": {
     "appId": "com.kode31.betterdrive",
     "productName": "BetterDrive",
-    "files": ["index.html", "standby.html", "main.js", "preload.js", "google-config.js", "icons/**/*"],
-    "directories": { "output": "dist" },
+    "files": [
+      "index.html",
+      "standby.html",
+      "main.js",
+      "preload.js",
+      "google-config.js",
+      "icons/**/*",
+      "preview/**/*",
+      "vendor/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "asar": false,
     "publish": {
       "provider": "github",
       "owner": "bwinwho",
@@ -26,7 +39,14 @@
       "releaseType": "release"
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "icons/icon.ico"
     },
     "nsis": {
@@ -35,5 +55,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }
+  },
+  "dependencies": {
+    "pdfjs-dist": "^5.4.624"
   }
 }

@@ -2015,7 +2015,8 @@ $('#btn-link').onclick=()=> newLinkFlow();
 
 /* ================= PREVIEW ================= */
 const FULLSCREEN_KINDS = ['image','video','audio','text','pdf'];
-function openPreview(f){
+async function openPreview(f){
+  await window.PreviewEngine?.unmountCurrent?.(); // release whatever the last preview mounted (worker/canvas/etc) before we overwrite it
   S.pvFile=f;
   const k=kind(f);
   $('#preview').classList.toggle('pv-fullscreen', FULLSCREEN_KINDS.includes(k));
@@ -2070,18 +2071,27 @@ function openPreview(f){
       }).catch(()=> driveOpenExternal(body,f));
     }
   }
-  else if(k==='pdf'||k==='gdoc'){
-    if(f._local){ embedFallback(body,f); }
-    else{
-      /* Docs/Sheets/Slides have no raw bytes to fetch — export to PDF instead,
-         still through our own token, never Google's hosted editor. */
-      const blobPromise = k==='gdoc' ? exportBlob(f.id,'application/pdf') : fetchBlob(f.id);
-      blobPromise.then(b=>{ if(S.pvFile?.id!==f.id) return;
-        S.pvObjectUrl=URL.createObjectURL(b);
-        body.innerHTML=`<iframe src="${S.pvObjectUrl}"></iframe>`;
-        wireIframeEscape(body.querySelector('iframe'));
-      }).catch(()=> driveOpenExternal(body,f));
-    }
+  else if(k==='pdf'){
+    /* pdf.js (Components layer) via the Preview Engine — real thumbnails,
+       search, zoom, page nav and printing, for both local and Drive-backed
+       files. See preview/plugins/pdf.mjs. */
+    const bytesPromise = f._local ? window.localFS.readFile(f.id) : fetchBlob(f.id).then(b=>b.arrayBuffer());
+    bytesPromise.then(arrayBuffer=>{ if(S.pvFile?.id!==f.id) return;
+      return window.PreviewEngine.openInEngine('pdf', f, body, { arrayBuffer });
+    }).catch(e=>{
+      if(S.pvFile?.id!==f.id) return;
+      if(f._local) body.innerHTML=`<div class="loading">Could not load PDF — ${esc(e.message||'')}</div>`;
+      else driveOpenExternal(body,f);
+    });
+  }
+  else if(k==='gdoc'){
+    /* Docs/Sheets/Slides have no raw bytes to fetch — export to PDF instead,
+       still through our own token, never Google's hosted editor. */
+    exportBlob(f.id,'application/pdf').then(b=>{ if(S.pvFile?.id!==f.id) return;
+      S.pvObjectUrl=URL.createObjectURL(b);
+      body.innerHTML=`<iframe src="${S.pvObjectUrl}"></iframe>`;
+      wireIframeEscape(body.querySelector('iframe'));
+    }).catch(()=> driveOpenExternal(body,f));
   }
   else if(k==='text'){
     if(f._local){ embedFallback(body,f); }
@@ -2167,9 +2177,6 @@ function embedFallback(body,f){
   const k=kind(f);
   if(k==='video'){
     body.innerHTML=`<video src="${toFileUrl(f.id)}" controls autoplay style="width:100%;height:100%;object-fit:contain"></video>`;
-  } else if(k==='pdf'){
-    body.innerHTML=`<iframe src="${toFileUrl(f.id)}"></iframe>`;
-    wireIframeEscape(body.querySelector('iframe'));
   } else if(k==='text'){
     openTextEditor(body, f);
   } else {
@@ -2191,6 +2198,7 @@ function driveOpenExternal(body,f){
   body.querySelector('#pv-open-external').onclick = ()=> window.open(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'), '_blank');
 }
 function closePreview(){
+  window.PreviewEngine?.unmountCurrent?.(); // release whatever's mounted (worker/canvas/etc) when dismissed without opening anything new
   $('#scrim').classList.remove('show'); $('#preview').classList.remove('show');
   const a=$('#p-audio'); if(a) a.pause();
   if(S.pvObjectUrl){ setTimeout(()=>{URL.revokeObjectURL(S.pvObjectUrl); S.pvObjectUrl=null;},600); }
@@ -2705,6 +2713,14 @@ function wireTitlebar(){
     $('#tb-max').title = state==='maximized' ? 'Restore' : 'Maximize';
   });
 }
+</script>
+<!-- Preview Engine: a real ES module, exposed onto window so the classic
+     script above (openPreview/closePreview) can call into it. The engine
+     itself lazily import()s one plugin module per file kind — nothing here
+     costs anything until a matching file is actually previewed. -->
+<script type="module">
+  import * as PreviewEngine from './preview/engine.mjs';
+  window.PreviewEngine = PreviewEngine;
 </script>
 </body>
 </html>
