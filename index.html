@@ -226,8 +226,10 @@ input{font-family:inherit;color:inherit}
   content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .35s var(--ease);
   background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),rgba(246,242,230,.07),transparent 65%);
 }
-.card.file{border-left:3px solid var(--tint, rgba(234,228,214,.17))}
-.card.favourited{border-color:rgba(232,199,102,.55)!important;box-shadow:0 0 0 1px rgba(232,199,102,.15),0 14px 40px rgba(0,0,0,.4)}
+/* a whisper of the file's kind colour as a soft shadow — reads at a glance, never shouts */
+.card.file{box-shadow:0 2px 13px -7px color-mix(in srgb, var(--tint, #7a756a) 45%, transparent)}
+.card.file:hover{box-shadow:0 18px 44px rgba(0,0,0,.4),0 3px 16px -7px color-mix(in srgb, var(--tint, #7a756a) 55%, transparent)}
+.card.favourited{border-color:rgba(232,199,102,.55)!important;box-shadow:0 0 0 1px rgba(232,199,102,.15),0 14px 40px rgba(0,0,0,.4)!important}
 .card.favourited:hover{border-color:rgba(232,199,102,.8)!important}
 .card:hover::after{opacity:1}
 .card:hover{background:var(--card-hi);border-color:rgba(234,228,214,.34);transform:translateY(-3px);box-shadow:0 18px 44px rgba(0,0,0,.4)}
@@ -236,19 +238,6 @@ input{font-family:inherit;color:inherit}
   box-shadow:0 0 0 1px rgba(234,228,214,.3),0 14px 40px rgba(0,0,0,.45);
 }
 .card.kfocus .title{text-shadow:0 0 24px var(--glow)}
-.card.drop-hint{
-  border-color:rgba(234,228,214,.6);background:var(--card-hi);
-  box-shadow:0 0 0 1px rgba(234,228,214,.35),0 0 44px rgba(246,242,230,.1);
-  transform:scale(1.035);
-  transition:transform .35s var(--spring),border-color .25s var(--ease),background .25s var(--ease),box-shadow .25s var(--ease);
-}
-.card.dragging{
-  transform:scale(1.06) rotate(-1.5deg)!important;
-  box-shadow:0 30px 70px rgba(0,0,0,.55),0 0 0 1px rgba(234,228,214,.3)!important;
-  opacity:.85;z-index:20;
-  transition:transform .35s var(--spring),box-shadow .3s var(--ease),opacity .2s var(--ease)!important;
-}
-.zone-tab.drop-hint{color:var(--cream);text-shadow:0 0 18px var(--glow);background:rgba(234,228,214,.1);transform:scale(1.08);transition:all .3s var(--spring)}
 .card:active{transform:translateY(-1px) scale(.995)}
 .card.selected{border-color:rgba(234,228,214,.45);background:var(--card-hi);box-shadow:0 0 0 1px rgba(234,228,214,.25),0 14px 40px rgba(0,0,0,.4)}
 
@@ -258,8 +247,11 @@ input{font-family:inherit;color:inherit}
   transition:text-shadow .4s var(--ease);
 }
 .card:hover .title{text-shadow:0 0 26px var(--glow)}
-.card.folder .title{font-size:clamp(32px,4vw,48px);line-height:1.04;-webkit-line-clamp:2;min-height:2.08em}
+.card.folder .title{font-size:clamp(23px,2.7vw,34px);line-height:1.08;-webkit-line-clamp:2;min-height:2.16em}
 .card.file .title{font-size:20px;font-weight:500;line-height:1.18;-webkit-line-clamp:2;min-height:2.36em}
+/* only the actual text glyphs trigger rename — clicking empty title space opens the item */
+.card .title .ttx{display:inline;cursor:text;transition:text-decoration-color .2s var(--ease);text-decoration:underline transparent;text-underline-offset:3px;text-decoration-thickness:1px}
+.card:hover .title .ttx:hover{text-decoration-color:rgba(234,228,214,.4)}
 .card .meta{
   font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
   color:var(--dim);margin-top:20px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;
@@ -343,6 +335,8 @@ body.kbrowse .znum{opacity:.18}
 .empty p{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;margin-top:14px}
 
 /* skeletons */
+.sk-label{height:11px;width:110px;border-radius:2px;background:var(--card);margin:34px 0 18px;position:relative;overflow:hidden}
+.sk-label::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(234,228,214,.06) 50%,transparent 70%);transform:translateX(-100%);animation:shimmer 1.6s infinite}
 .sk{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--faint);border-radius:4px;height:170px;animation:fadeIn .4s both}
 .sk::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(234,228,214,.05) 50%,transparent 70%);transform:translateX(-100%);animation:shimmer 1.6s infinite}
 @keyframes shimmer{to{transform:translateX(100%)}}
@@ -559,7 +553,6 @@ body.electron #preview{top:38px}
 .pv-path:hover{color:var(--cream)}
 .crumb-seg{cursor:pointer;transition:color .2s var(--ease)}
 .crumb-seg:hover{color:var(--cream)}
-.crumb-seg.drop-hint{color:var(--cream);text-shadow:0 0 14px var(--glow)}
 
 /* ============ PC BROWSER (import from anywhere on the PC) ============ */
 #pcbrowse-scrim{position:fixed;inset:0;z-index:80;background:rgba(5,5,4,.66);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .3s var(--ease)}
@@ -625,7 +618,7 @@ body.electron .wordmark{display:none}
   .topbar{flex-wrap:wrap;gap:12px}
   .searchwrap{order:3;max-width:100%;flex-basis:100%}
   .card{padding:24px 22px}
-  .card.folder .title{font-size:30px}
+  .card.folder .title{font-size:22px}
   #preview{width:100vw}
 }
 </style>
@@ -699,7 +692,7 @@ body.electron .wordmark{display:none}
         <div class="menu hidden" id="menu-sort"></div>
       </div>
       <div style="position:relative">
-        <img class="avatar" id="avatar" alt="Account" title="Account &amp; cache options" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238E887B' stroke-width='2' stroke-linecap='round'%3E%3Cline x1='12' y1='5' x2='12' y2='14'/%3E%3Ccircle cx='12' cy='19' r='0.6' fill='%238E887B'/%3E%3C/svg%3E">
+        <img class="avatar" id="avatar" alt="Account" title="Account &amp; cache options" src="icons/icon-192.png" onerror="this.onerror=null;this.src=&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23E8C766' stroke-width='1.6'%3E%3Cpath d='M12 2l2.6 5.7L21 8.5l-4.8 4.3 1.3 6.5L12 16l-5.5 3.3 1.3-6.5L3 8.5l6.4-.8z'/%3E%3C/svg%3E&quot;">
         <div class="menu hidden" id="menu-user"></div>
       </div>
     </div>
@@ -909,13 +902,17 @@ const ICON_MOVE = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" s
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 function hostOf(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch(e){ return 'link'; } }
 function persistCore(){ LS.set('zones',S.zones); LS.set('activeZone',S.activeZoneId); LS.set('sort',S.sort); }
+/* remember exactly where the user was (world + deep folder path) so a reload —
+   including waking from standby, which reloads the whole renderer — drops them
+   right back in instead of at the world root */
+function persistPath(){ LS.set('path', S.path); LS.set('activeZone', S.activeZoneId); }
 function persistFavourites(){ LS.set('favourites',S.favourites); }
 function isFavourited(id){ return S.favourites.some(f=>f.id===id); }
 function toggleFavourite(f){
   const i=S.favourites.findIndex(x=>x.id===f.id);
   if(i>=0) S.favourites.splice(i,1); else S.favourites.push({...f});
   persistFavourites();
-  if(zone()?.type==='favourites'){ delete S.cache[FAVOURITES_ID]; loadCurrent(); }
+  if(zone()?.type==='favourites'){ delete S.cache[FAVOURITES_ID]; loadCurrent({refresh:true}); }
   toast(i>=0?'Removed from Favourites':'Added to Favourites');
 }
 const CACHE_CAP = 40;
@@ -1191,14 +1188,6 @@ function renderZoneBar(){
     b.className='zone-tab'+(z.id===S.activeZoneId?' active':'');
     b.innerHTML=(zi<9?`<span class="znum">${zi+1}</span>`:'')+esc(z.name);
     b.onclick=()=> openZone(z.id);
-    b.ondragover=e=>{ if(!S.internalDrag) return; e.preventDefault(); e.dataTransfer.dropEffect='move'; b.classList.add('drop-hint'); };
-    b.ondragleave=()=> b.classList.remove('drop-hint');
-    b.ondrop=e=>{ if(!S.internalDrag) return; e.preventDefault(); b.classList.remove('drop-hint');
-      const ids=JSON.parse(e.dataTransfer.getData('application/x-bd')||'[]');
-      const items=(S.displayOrder||[]).filter(x=>ids.includes(x.id));
-      if(z.type==='favourites'){ items.forEach(it=>{ if(!isFavourited(it.id)) toggleFavourite(it); }); return; }
-      dropMove(items, zoneRootId(z));
-    };
     bar.appendChild(b);
   });
 }
@@ -1269,7 +1258,7 @@ function folderCard(f, i, num){
     ${zone()?.type==='recent'?`<button class="move" title="Move to…">${ICON_MOVE}</button>`:''}
     <button class="fav${isFavourited(f.id)?' active':''}">${ICON_STAR}</button>
     <div class="check">✓</div>
-    <div class="title">${esc(f.name)}</div>
+    <div class="title"><span class="ttx">${esc(f.name)}</span></div>
     <div class="meta">
       <span class="m-count">${m? m.count+' ITEMS':'…'}</span>
       ${m&&m.size?`<span class="sep">·</span><span>${fmtSize(m.size)}</span>`:''}
@@ -1301,7 +1290,7 @@ function fileCard(f, i, num){
     <button class="fav${isFavourited(f.id)?' active':''}">${ICON_STAR}</button>
     <div class="check">✓</div>
     ${thumb}
-    <div class="title">${esc(displayName(f))}</div>
+    <div class="title"><span class="ttx">${esc(displayName(f))}</span></div>
     <div class="meta">
       ${k==='link'?`<span>${esc(hostOf(f.appProperties.bdlink))}</span><span class="sep">·</span>`:(f.size?`<span>${fmtSize(f.size)}</span><span class="sep">·</span>`:'')}
       <span>${k==='link'?'LINK ↗':timeAgo(f.modifiedTime).toUpperCase()}</span>
@@ -1389,48 +1378,16 @@ function wireCard(el, f, openFn){
   el.querySelector('.fav').onclick = e=>{ e.stopPropagation(); toggleFavourite(f); const active=isFavourited(f.id); e.currentTarget.classList.toggle('active', active); el.classList.toggle('favourited', active); };
   el.querySelector('.move')?.addEventListener('click', e=>{ e.stopPropagation(); moveFlow([f]); });
   el.querySelector('.more').onclick = e=>{ e.stopPropagation(); itemMenu(f, e.clientX, e.clientY); };
-  el.querySelector('.title').onclick = e=>{ e.stopPropagation(); S.lastItem=f; setFocus(f.id,false); renameFlow(f); };
+  /* rename fires only on the actual text glyphs (.ttx is inline), so clicking the
+     empty space around a short name still opens the item */
+  el.querySelector('.ttx').onclick = e=>{ e.stopPropagation(); S.lastItem=f; setFocus(f.id,false); renameFlow(f); };
   el.oncontextmenu = e=>{ e.preventDefault(); itemMenu(f, e.clientX, e.clientY); };
   let lp;
   el.onpointerdown = e=>{ if(e.pointerType==='touch'){ lp=setTimeout(()=>{ toggleSelect(f.id, el); navigator.vibrate?.(8); },480); } };
   el.onpointerup = el.onpointermove = el.onpointerleave = ()=> clearTimeout(lp);
   el.onclick = ()=> { S.lastItem=f; setFocus(f.id,false); if(S.selection.size) toggleSelect(f.id, el); else openFn(); };
-
-  /* drag a card (or the whole selection) onto a folder card / world tab to move it */
-  el.draggable = true;
-  el.ondragstart = e=>{
-    S.internalDrag=true;
-    const ids = S.selection.has(f.id) ? [...S.selection] : [f.id];
-    e.dataTransfer.setData('application/x-bd', JSON.stringify(ids));
-    e.dataTransfer.effectAllowed='move';
-    el.classList.add('dragging');
-  };
-  el.ondragend = ()=>{ S.internalDrag=false; el.classList.remove('dragging'); $$('.drop-hint').forEach(c=>c.classList.remove('drop-hint')); };
-
-  if(f.mimeType===FOLDER_MIME){
-    el.ondragover = e=>{ if(!S.internalDrag) return; e.preventDefault(); e.dataTransfer.dropEffect='move'; el.classList.add('drop-hint'); };
-    el.ondragleave = ()=> el.classList.remove('drop-hint');
-    el.ondrop = e=>{ if(!S.internalDrag) return; e.preventDefault(); e.stopPropagation(); el.classList.remove('drop-hint');
-      const ids=JSON.parse(e.dataTransfer.getData('application/x-bd')||'[]');
-      dropMove((S.displayOrder||[]).filter(x=>ids.includes(x.id) && x.id!==f.id), f.id);
-    };
-  }
 }
 
-async function dropMove(items, toId){
-  if(!items.length) return;
-  const mixed = items.some(it=> isLocalId(it.id)!==isLocalId(toId));
-  if(mixed) return toast("Can't move between local and Drive yet",true);
-  let ok=0;
-  for(const it of items){
-    try{ await moveItem(it.id, it.parents?.[0]||currentFolderId(), toId); ok++; }
-    catch(e){ toast(e.message,true); }
-  }
-  if(ok){ toast(ok+' moved'); clearSelection();
-    delete S.cache[currentFolderId()]; delete S.cache[toId]; delete S.meta[toId];
-    await loadCurrent();
-  }
-}
 
 const metaQueue=[]; const metaPending=new Set(); let metaActive=0;
 function hydrateFolderMeta(folderId, el){
@@ -1459,7 +1416,10 @@ async function hydrateOne(folderId, el){
 }
 
 function skeleton(){
-  const stage=$('#stage'); stage.innerHTML='<div class="grid-folders">'+'<div class="sk"></div>'.repeat(4)+'</div>';
+  /* a full grid of shimmering placeholders — reads as an intentional "loading"
+     state that fills the viewport, never a bare black gap */
+  const stage=$('#stage');
+  stage.innerHTML='<div class="sk-label"></div><div class="grid-files">'+'<div class="sk"></div>'.repeat(10)+'</div>';
 }
 
 /* cursor spotlight — cards glow where the pointer is */
@@ -1480,6 +1440,23 @@ async function openZone(zoneId){
   renderZoneBar();
   await loadCurrent();
 }
+/* on boot, drop the user back into the exact folder they last had open (persisted
+   in localStorage) instead of the world root — but only if that deep folder still
+   exists; otherwise quietly fall back to the root. */
+async function restoreLastLocation(){
+  const z=zone();
+  const saved=LS.get('path', null);
+  if(Array.isArray(saved) && saved.length>1 && saved[0]?.id===zoneRootId(z)){
+    try{
+      await listChildren(saved[saved.length-1].id);   // probe: still there?
+      S.path=saved.map(p=>({id:p.id,name:p.name,type:p.type}));
+      S.keyMode='worlds'; syncKB(); renderZoneBar();
+      await loadCurrent();
+      return;
+    }catch(e){ /* folder vanished while away — fall through to the world root */ }
+  }
+  await openZone(S.activeZoneId);
+}
 async function openFolder(f){
   trackRecent(f);
   S.path.push({id:f.id,name:f.name,type: isLocalId(f.id)?'local':'drive'});
@@ -1492,11 +1469,15 @@ async function goBack(){
 }
 function listSig(arr){ return (arr||[]).map(f=>f.id+f.modifiedTime+(f.size||'')).join('|'); }
 let fsChangeWired=false;
+let fsRefreshTimer=null;
 function wireFsWatch(){
   if(fsChangeWired || !IS_ELECTRON) return; fsChangeWired=true;
   window.localFS.onChanged(changedPath=>{
-    /* only matters if the changed folder is the one currently on screen */
-    if(!S.searching && currentFolderId()===changedPath) loadCurrent();
+    /* only matters if the changed folder is the one currently on screen; debounce
+       a burst of events into one silent in-place refresh (no skeleton, no scroll jump) */
+    if(S.searching || currentFolderId()!==changedPath) return;
+    clearTimeout(fsRefreshTimer);
+    fsRefreshTimer=setTimeout(()=> loadCurrent({refresh:true}), 250);
   });
 }
 function syncWatch(){
@@ -1519,24 +1500,42 @@ async function renderItemsWithShimmer(items, animate){
   S.items = mergeLinked(items);
   renderStage(animate);
 }
-async function loadCurrent(){
-  clearSelection();
+function scroller(){ return document.scrollingElement || document.documentElement; }
+/* opts.refresh — a background re-sync of the folder that's already on screen
+   (file-watcher, post-action). It never shows the skeleton and never jumps the
+   scroll: if the listing actually changed it swaps in place, otherwise it does
+   nothing at all. That's what turns a spurious Windows change event from a
+   black flash into a no-op. */
+async function loadCurrent(opts={}){
+  const refresh = opts.refresh===true;
   const fid=currentFolderId();
   syncWatch();
   const cached=S.cache[fid];
-  if(cached) await renderItemsWithShimmer(cached.files, true);
-  else skeleton();
+  const keepScroll = refresh ? (scroller().scrollTop||0) : 0;
+  if(!refresh){
+    clearSelection();
+    if(cached) await renderItemsWithShimmer(cached.files, true);
+    else skeleton();
+    scroller().scrollTop = 0;   // a fresh navigation always opens at the top
+    persistPath();
+  }
   try{
-    let fresh = await listChildren(fid);
+    const fresh = await listChildren(fid);
     const changed = !cached || listSig(fresh)!==listSig(cached.files);
     S.cache[fid]={files:fresh, ts:Date.now()};
     const size=fresh.reduce((a,f)=>a+(+f.size||0),0);
     S.meta[fid]={count:fresh.length,size};
     persistCache();
-    if(changed){
+    if(refresh){
+      if(changed){ S.items=mergeLinked(fresh); renderStage(false); scroller().scrollTop = keepScroll; }
+    } else if(changed){
       await renderItemsWithShimmer(fresh, !cached); /* animate only on first paint; silent swap if cache was shown */
     } else { renderCrumb(); }
-  }catch(e){ if(!cached){ $('#stage').innerHTML=`<div class="empty"><div class="big">Couldn't load</div><p>${esc(e.message)}</p></div>`; } toast(e.message,true); }
+  }catch(e){
+    if(refresh) return;   // background sync: fail silently, keep showing what's there
+    if(!cached){ $('#stage').innerHTML=`<div class="empty"><div class="big">Couldn't load</div><p>${esc(e.message)}</p></div>`; }
+    toast(e.message,true);
+  }
 }
 function mergeLinked(files){
   if(!atZoneRoot() || curType()==='local') return files;
@@ -1585,7 +1584,7 @@ async function pasteFlow(){
   }
   if(mode==='cut') S.clipboard=null; /* cut is one-shot; copy can be pasted repeatedly */
   toast(ok+' pasted'+(fail?', '+fail+' failed':''));
-  delete S.cache[destDir]; await loadCurrent();
+  delete S.cache[destDir]; await loadCurrent({refresh:true});
 }
 
 /* ================= MENUS / MODALS ================= */
@@ -1670,7 +1669,7 @@ function newFolderFlow(){
     try{
       const f=await createFolder(name, currentFolderId());
       toast('Folder created');
-      delete S.cache[currentFolderId()]; await loadCurrent();
+      delete S.cache[currentFolderId()]; await loadCurrent({refresh:true});
     }catch(e){ toast(e.message,true); }
   },'Create');
 }
@@ -1682,7 +1681,7 @@ function renameFlow(f){
     if(dot>0) range=[0,dot]; /* select basename only — typing a new name leaves the extension untouched */
   }
   promptModal('Rename','',f.name, async name=>{
-    try{ await renameItem(f.id,name); f.name=name; toast('Renamed'); delete S.cache[currentFolderId()]; await loadCurrent(); }
+    try{ await renameItem(f.id,name); f.name=name; toast('Renamed'); delete S.cache[currentFolderId()]; await loadCurrent({refresh:true}); }
     catch(e){ toast(e.message,true); }
   }, 'Save', range);
 }
@@ -1691,7 +1690,7 @@ function trashFlow(items){
     'Moved to your Google Drive trash — recoverable for 30 days.', async ()=>{
     for(const f of items){ try{ await trashItem(f.id); }catch(e){ toast(e.message,true); } }
     toast(items.length>1?items.length+' items trashed':'Moved to trash');
-    clearSelection(); delete S.cache[currentFolderId()]; await loadCurrent();
+    clearSelection(); delete S.cache[currentFolderId()]; await loadCurrent({refresh:true});
   });
 }
 function zoneRootId(z){ return z.type==='local' ? z.localPath : z.type==='favourites' ? FAVOURITES_ID : z.type==='recent' ? RECENT_ID : z.driveId; }
@@ -1704,7 +1703,7 @@ function moveFlow(items){
       try{ await moveItem(f.id, f.parents?.[0]||currentFolderId(), pick.id); }catch(e){ toast(e.message,true); }
     }
     toast('Moved to '+pick.label);
-    clearSelection(); delete S.cache[currentFolderId()]; delete S.cache[pick.id]; await loadCurrent();
+    clearSelection(); delete S.cache[currentFolderId()]; delete S.cache[pick.id]; await loadCurrent({refresh:true});
   });
 }
 async function downloadFlow(f){
@@ -1740,7 +1739,7 @@ function newLinkFlow(){
           body:JSON.stringify({name, mimeType:'text/plain', parents:[currentFolderId()], appProperties:{bdlink:url}})});
       }
       toast('Link created');
-      delete S.cache[currentFolderId()]; await loadCurrent();
+      delete S.cache[currentFolderId()]; await loadCurrent({refresh:true});
     }catch(e){ toast(e.message,true); }
   };
   $('#m-ok').onclick=go;
@@ -1786,7 +1785,7 @@ function uploadBatch(items, label){
   const parents=[...new Set(items.map(i=>i.parentId))];
   const finish=()=>{
     parents.forEach(p=>{ delete S.cache[p]; delete S.meta[p]; });
-    if(parents.includes(currentFolderId())) loadCurrent();
+    if(parents.includes(currentFolderId())) loadCurrent({refresh:true});
   };
   if(items.length<=6 && !label){
     Promise.allSettled(items.map(it=> uploadRow(it.file, it.parentId))).then(finish);
@@ -2138,8 +2137,8 @@ function renderSortMenu(){
 $('#btn-sort').onclick=e=>{ e.stopPropagation(); renderSortMenu(); $('#menu-user').classList.add('hidden'); $('#menu-sort').classList.toggle('hidden'); };
 $('#avatar').onclick=e=>{ e.stopPropagation();
   const m=$('#menu-user'); m.innerHTML='';
-  const refresh=document.createElement('button'); refresh.textContent='Refresh this view'; refresh.onclick=()=>{ closeMenus(); delete S.cache[currentFolderId()]; loadCurrent(); };
-  const clearc=document.createElement('button'); clearc.textContent='Clear local cache'; clearc.onclick=()=>{ closeMenus(); S.cache={}; S.meta={}; persistCache(); loadCurrent(); toast('Cache cleared'); };
+  const refresh=document.createElement('button'); refresh.textContent='Refresh this view'; refresh.onclick=()=>{ closeMenus(); delete S.cache[currentFolderId()]; loadCurrent({refresh:true}); };
+  const clearc=document.createElement('button'); clearc.textContent='Clear local cache'; clearc.onclick=()=>{ closeMenus(); S.cache={}; S.meta={}; persistCache(); loadCurrent({refresh:true}); toast('Cache cleared'); };
   if(S.driveSignedIn){
     const info=document.createElement('button'); info.innerHTML=`<span style="text-transform:none;letter-spacing:.05em">${esc(S.user?.email||'')}</span>`; info.style.pointerEvents='none';
     m.append(info);
@@ -2293,7 +2292,7 @@ function palActions(){
     {label:'Upload files', hint:'FILES', run:()=> $('#filepick').click()},
     {label:'Upload folder', hint:'TREE', run:()=> $('#dirpick').click()},
     ...(IS_ELECTRON && isLocalId(currentFolderId()) ? [{label:'Browse PC…', hint:'IMPORT', run:()=> openPCBrowser(currentFolderId())}] : []),
-    {label:'Refresh this view', hint:'SYNC', run:()=>{ delete S.cache[currentFolderId()]; loadCurrent(); }},
+    {label:'Refresh this view', hint:'SYNC', run:()=>{ delete S.cache[currentFolderId()]; loadCurrent({refresh:true}); }},
     {label:'Shortcut help', hint:'?', run:()=> showHelp()},
   ];
 }
@@ -2443,7 +2442,7 @@ async function pcbTransfer(mode){
     }catch(e){ fail++; }
   }
   toast(ok+' added'+(fail?', '+fail+' failed':''));
-  delete S.cache[PCB.targetDir]; if(currentFolderId()===PCB.targetDir) await loadCurrent();
+  delete S.cache[PCB.targetDir]; if(currentFolderId()===PCB.targetDir) await loadCurrent({refresh:true});
 }
 $('#pcb-close').onclick=closePCBrowser;
 $('#pcb-cancel').onclick=closePCBrowser;
@@ -2500,7 +2499,8 @@ $('#btn-signin').onclick=async ()=>{
       renderZoneBar();
       $('#sort-label').textContent=SORTS[S.sort].label;
       S.driveSignedIn = !!(S.clientId && S.apiKey && S.user);
-      if(S.activeZoneId) await openZone(S.activeZoneId);
+      if(S.activeZoneId && zone()) await restoreLastLocation();
+      else if(S.zones[0]) await openZone(S.zones[0].id);
     })();
     return;
   }
@@ -2512,20 +2512,6 @@ $('#crumb').addEventListener('click', e=>{
   const seg=e.target.closest('.crumb-seg'); if(!seg) return;
   const idx=+seg.dataset.idx;
   if(idx>=0 && idx<S.path.length-1){ S.path=S.path.slice(0, idx+1); syncKB(); loadCurrent(); }
-});
-$('#crumb').addEventListener('dragover', e=>{
-  if(!S.internalDrag) return;
-  const seg=e.target.closest('.crumb-seg'); if(!seg) return;
-  e.preventDefault(); e.dataTransfer.dropEffect='move'; seg.classList.add('drop-hint');
-});
-$('#crumb').addEventListener('dragleave', e=>{ e.target.closest('.crumb-seg')?.classList.remove('drop-hint'); });
-$('#crumb').addEventListener('drop', e=>{
-  if(!S.internalDrag) return;
-  const seg=e.target.closest('.crumb-seg'); if(!seg) return;
-  e.preventDefault(); seg.classList.remove('drop-hint');
-  const targetId=S.path[+seg.dataset.idx]?.id; if(!targetId) return;
-  const ids=JSON.parse(e.dataTransfer.getData('application/x-bd')||'[]');
-  dropMove((S.displayOrder||[]).filter(x=>ids.includes(x.id)), targetId);
 });
 
 function wireTitlebar(){
