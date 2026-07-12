@@ -1,6 +1,6 @@
 {
   "name": "betterdrive",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Your files, rebuilt beautiful.",
   "main": "main.js",
   "author": "Bwin31 / Kode31",
@@ -17,7 +17,7 @@
   "build": {
     "appId": "com.kode31.betterdrive",
     "productName": "BetterDrive",
-    "files": ["index.html", "standby.html", "main.js", "preload.js", "icons/**/*"],
+    "files": ["index.html", "standby.html", "main.js", "preload.js", "google-config.js", "icons/**/*"],
     "directories": { "output": "dist" },
     "publish": {
       "provider": "github",

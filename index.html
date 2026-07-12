@@ -333,6 +333,7 @@ body.kbrowse .znum{opacity:.18}
 }
 .empty .big{font-family:var(--serif);font-size:clamp(28px,4vw,42px);font-weight:500;color:rgba(234,228,214,.55);text-transform:uppercase;letter-spacing:.02em}
 .empty p{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;margin-top:14px}
+.empty p.cloud-desc{font-family:var(--sans, inherit);font-size:13px;letter-spacing:.01em;text-transform:none;line-height:1.6;max-width:380px;margin:14px auto 0;color:var(--dim)}
 
 /* skeletons */
 .sk-label{height:11px;width:110px;border-radius:2px;background:var(--card);margin:34px 0 18px;position:relative;overflow:hidden}
@@ -714,7 +715,6 @@ body.electron .wordmark{display:none}
 
   <div id="selectbar">
     <span class="count" id="sel-count">0 SELECTED</span>
-    <button id="sel-download">Download</button>
     <button id="sel-copy">Copy</button>
     <button id="sel-cut">Cut</button>
     <button id="sel-move">Move</button>
@@ -825,6 +825,7 @@ const S = {
   searching: false,
   keyMode: 'worlds',                     // 'worlds' = digits pick worlds · 'browse' = digits open cards
   pvFile: null, pvObjectUrl: null,
+  cloudConnected: LS.get('cloudConnected', false),  // signed in to the Cloud (Google Drive) world
 };
 
 const IS_ELECTRON = !!window.localFS;
@@ -910,10 +911,24 @@ function persistFavourites(){ LS.set('favourites',S.favourites); }
 function isFavourited(id){ return S.favourites.some(f=>f.id===id); }
 function toggleFavourite(f){
   const i=S.favourites.findIndex(x=>x.id===f.id);
-  if(i>=0) S.favourites.splice(i,1); else S.favourites.push({...f});
+  const adding = i<0;
+  if(adding) S.favourites.push({...f}); else S.favourites.splice(i,1);
   persistFavourites();
   if(zone()?.type==='favourites'){ delete S.cache[FAVOURITES_ID]; loadCurrent({refresh:true}); }
-  toast(i>=0?'Removed from Favourites':'Added to Favourites');
+  toast(adding?'Added to Favourites':'Removed from Favourites');
+  /* newly-favourited local files quietly sync up to My Drive/BetterDrive/Favourites
+     in the background — best-effort, doesn't block or delay the favourite itself */
+  if(adding && f._local && f.mimeType!==FOLDER_MIME && S.cloudConnected) syncFavouriteToCloud(f);
+}
+async function syncFavouriteToCloud(f){
+  try{
+    const folderId = await ensureCloudReady();
+    if(!folderId) return;
+    const buf = await window.localFS.readFile(f.id);
+    const file = new File([buf], f.name, {type: guessLocalMime(f.id)});
+    await uploadFile(file, folderId, ()=>{});
+    toast(f.name+' synced to Drive');
+  }catch(e){ toast("Couldn't sync "+f.name+' to Drive', true); }
 }
 const CACHE_CAP = 40;
 function persistCache(){
@@ -941,6 +956,11 @@ function initTokenClient(){
 }
 let tokenInflight=null;
 function getToken(interactive){
+  /* Electron's renderer runs over file://, where Google's GIS token client
+     (below) can't work at all — it requires a real http(s) origin registered
+     in Google Cloud Console. The desktop app instead gets its token through
+     main.js's own OAuth loopback flow (see getCloudToken). */
+  if(IS_ELECTRON) return getCloudToken(interactive);
   if(S.token && Date.now() < S.tokenExp - 60000) return Promise.resolve(S.token);
   if(tokenInflight && !interactive) return tokenInflight; /* one refresh for all parallel callers */
   tokenInflight = new Promise((resolve,reject)=>{
@@ -955,6 +975,35 @@ function getToken(interactive){
     catch(e){ tokenInflight=null; reject(e); }
   });
   return tokenInflight;
+}
+
+/* ---------- Cloud (Google Drive) auth — Electron path ----------
+   Silent path: ask main.js for a cached/refreshed access token, no UI.
+   Interactive path: main.js pops the system browser through a full OAuth
+   round-trip and resolves once the user finishes signing in. */
+let cloudTokenInflight=null;
+async function getCloudToken(interactive){
+  if(S.token && Date.now() < S.tokenExp - 60000) return S.token;
+  if(cloudTokenInflight) return cloudTokenInflight;
+  cloudTokenInflight = (async ()=>{
+    const silent = await window.localFS.cloudToken().catch(()=>null);
+    if(silent){
+      S.token=silent.access_token; S.tokenExp=Date.now()+(silent.expires_in||3600)*1000;
+      if(!S.cloudConnected){ S.cloudConnected=true; LS.set('cloudConnected',true); }
+      return S.token;
+    }
+    if(!interactive){
+      if(S.cloudConnected){ S.cloudConnected=false; LS.set('cloudConnected',false); } /* self-heal: reconnect prompt shows again next visit */
+      throw new Error('Not connected to Google Drive');
+    }
+    const configured = await window.localFS.cloudIsConfigured();
+    if(!configured) throw new Error("Cloud isn't configured with a Google Client ID yet");
+    const fresh = await window.localFS.cloudConnect();
+    S.token=fresh.access_token; S.tokenExp=Date.now()+(fresh.expires_in||3600)*1000;
+    S.cloudConnected=true; LS.set('cloudConnected',true);
+    return S.token;
+  })();
+  try{ return await cloudTokenInflight; } finally{ cloudTokenInflight=null; }
 }
 
 /* ---------------- drive api ---------------- */
@@ -986,7 +1035,11 @@ async function driveListChildren(folderId){
 function listChildren(folderId){
   if(folderId===FAVOURITES_ID) return favouritesList();
   if(folderId===RECENT_ID) return recentList();
-  return isLocalId(folderId) ? localList(folderId) : driveListChildren(folderId);
+  if(isLocalId(folderId)) return localList(folderId);
+  /* Cloud's own root listing hides the app's "BetterDrive" sync folder — we
+     already have a dedicated Favourites world, no need to show a second,
+     confusing copy of it buried inside Cloud. */
+  return driveListChildren(folderId).then(items=> (folderId==='root' && S.rootId) ? items.filter(f=>f.id!==S.rootId) : items);
 }
 function favouritesList(){ return Promise.resolve(S.favourites.map(f=>({...f}))); }
 /* Recent = Windows' own Recent Items (.lnk shortcuts Explorer/Office/etc. already drop
@@ -1096,6 +1149,34 @@ async function seedZones(){
   persistCore();
 }
 
+/* ---------- Cloud world bootstrap ----------
+   Finds-or-creates My Drive/BetterDrive/Favourites, the destination for
+   auto-synced favourites. Its id is cached (memory + localStorage) so it's
+   only looked up once per app run, and used both for uploads and to filter
+   the "BetterDrive" folder itself out of the Cloud tab's root listing —
+   we already show a Favourites world, no need to show a second copy of it. */
+let cloudFavFolderId = LS.get('cloudFavFolderId', null);
+let cloudReadyPromise = null;
+function ensureCloudReady(){
+  if(!S.cloudConnected) return Promise.resolve(null);
+  if(cloudFavFolderId) return Promise.resolve(cloudFavFolderId);
+  if(!cloudReadyPromise){
+    cloudReadyPromise = ensureDriveFavouritesFolder()
+      .then(id=>{ cloudFavFolderId=id; LS.set('cloudFavFolderId', id); return id; })
+      .catch(e=> null)
+      .finally(()=>{ cloudReadyPromise=null; });
+  }
+  return cloudReadyPromise;
+}
+async function ensureDriveFavouritesFolder(){
+  await ensureRoot(); // S.rootId = the 'BetterDrive' folder at My Drive's root
+  const q = encodeURIComponent(`name='Favourites' and mimeType='${FOLDER_MIME}' and trashed=false and '${S.rootId}' in parents`);
+  const d = await drv(`/files?q=${q}&fields=files(id,name)`);
+  if(d.files?.length) return d.files[0].id;
+  const f = await drv('/files?fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Favourites',mimeType:FOLDER_MIME,parents:[S.rootId]})});
+  return f.id;
+}
+
 /* ---------- worlds: exactly four, fixed, rebuilt every boot ----------
    Documents/Pictures/Downloads are live views of the real Windows folders.
    Favourites is a virtual singleton — it never maps to a real directory.
@@ -1115,8 +1196,13 @@ async function rescanLocalWorlds(){
   });
   const recent = S.zones.find(z=>z.type==='recent') || {id:uid(), name:'Recent', type:'recent', protected:true};
   const favourites = S.zones.find(z=>z.type==='favourites') || {id:uid(), name:'Favourites', type:'favourites', protected:true};
+  /* Cloud = My Drive's own root ('root' is Drive's own alias for it), so every
+     existing Drive code path (driveListChildren, createFolder, moveItem, etc.)
+     works completely unmodified — Cloud is just a Drive zone whose id happens
+     to be that special alias instead of a real folder id. */
+  const cloud = S.zones.find(z=>z.type==='drive' && z.driveId==='root') || {id:uid(), name:'Cloud', type:'drive', driveId:'root', protected:true};
 
-  S.zones = [recent, favourites, ...osZones];
+  S.zones = [recent, favourites, ...osZones, cloud];
   if(!S.activeZoneId || !S.zones.find(z=>z.id===S.activeZoneId)) S.activeZoneId = S.zones[0]?.id||null;
   persistCore();
 }
@@ -1432,13 +1518,36 @@ $('#stage').addEventListener('pointermove', e=>{
 
 /* ================= NAVIGATION ================= */
 function syncKB(){ document.body.classList.toggle('kbrowse', S.searching || !atZoneRoot() || S.keyMode==='browse'); }
+function isCloudZone(z){ return !!z && z.type==='drive' && z.driveId==='root'; }
 async function openZone(zoneId){
   S.activeZoneId=zoneId; persistCore();
   const z=zone();
   S.path=[{id: zoneRootId(z), name:z.name, type:z.type||'drive'}];
   S.keyMode='worlds'; syncKB();
   renderZoneBar();
+  if(isCloudZone(z) && !S.cloudConnected){ renderCloudConnectPrompt(); return; }
+  if(isCloudZone(z)) await ensureCloudReady();
   await loadCurrent();
+}
+function renderCloudConnectPrompt(){
+  renderCrumb();
+  $('#stage').innerHTML = `<div class="empty">
+    <div class="big">Connect Google Drive</div>
+    <p class="cloud-desc">Full read/write access to your Drive, right inside BetterDrive.<br>Favourites you star get synced up here automatically.</p>
+    <button class="btn solid" id="btn-cloud-connect" style="margin-top:22px">Connect Google Drive</button>
+  </div>`;
+  $('#btn-cloud-connect').onclick = async ()=>{
+    const btn=$('#btn-cloud-connect'); btn.disabled=true; btn.textContent='Waiting for Google sign-in…';
+    try{
+      await getToken(true);
+      toast('Connected to Google Drive');
+      await ensureCloudReady();
+      await loadCurrent();
+    }catch(e){
+      toast(e.message||'Could not connect', true);
+      if(btn.isConnected){ btn.disabled=false; btn.textContent='Connect Google Drive'; }
+    }
+  };
 }
 /* on boot, drop the user back into the exact folder they last had open (persisted
    in localStorage) instead of the world root — but only if that deep folder still
@@ -2149,9 +2258,22 @@ $('#avatar').onclick=e=>{ e.stopPropagation();
     m.append(inst);
   }
   m.append(refresh,clearc);
+  if(S.cloudConnected){
+    const dis=document.createElement('button'); dis.className='danger'; dis.textContent='Disconnect Google Drive';
+    dis.onclick=async ()=>{ closeMenus(); await disconnectCloud(); };
+    m.append(dis);
+  }
   if(S.driveSignedIn){ const out=document.createElement('button'); out.className='danger'; out.textContent='Sign out of Drive'; out.onclick=signOut; m.append(document.createElement('hr'),out); }
   $('#menu-sort').classList.add('hidden'); m.classList.toggle('hidden');
 };
+async function disconnectCloud(){
+  try{ await window.localFS.cloudDisconnect(); }catch(e){}
+  S.cloudConnected=false; LS.set('cloudConnected',false);
+  S.token=null; S.tokenExp=0;
+  cloudFavFolderId=null; LS.del('cloudFavFolderId');
+  toast('Disconnected from Google Drive');
+  if(isCloudZone(zone())) await openZone(S.activeZoneId);
+}
 function signOut(){
   closeMenus();
   try{ google.accounts.oauth2.revoke(S.token,()=>{}); }catch(e){}
@@ -2169,11 +2291,6 @@ $('#sel-trash').onclick=()=> trashFlow(selectedItems());
 $('#sel-move').onclick=()=> moveFlow(selectedItems());
 $('#sel-copy').onclick=()=> clipboardCopy(selectedItems(),'copy');
 $('#sel-cut').onclick=()=> clipboardCopy(selectedItems(),'cut');
-$('#sel-download').onclick=async ()=>{
-  const files=selectedItems().filter(f=>f.mimeType!==FOLDER_MIME);
-  if(!files.length) return toast('Folders can\'t be downloaded',true);
-  for(const f of files) await downloadFlow(f);
-};
 
 /* ================= KEYS ================= */
 function isTyping(){ const t=document.activeElement?.tagName; return t==='INPUT'||t==='TEXTAREA'; }

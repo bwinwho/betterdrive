@@ -26,6 +26,10 @@ contextBridge.exposeInMainWorld('localFS', {
   onChanged: (cb) => ipcRenderer.on('fs:changed', (e, dirPath) => cb(dirPath)),
   searchPC: (query) => ipcRenderer.invoke('fs:searchPC', query),
   listPC: (dirPath) => ipcRenderer.invoke('fs:listPC', dirPath),
+  cloudConnect: () => ipcRenderer.invoke('cloud:connect'),
+  cloudToken: () => ipcRenderer.invoke('cloud:token'),
+  cloudDisconnect: () => ipcRenderer.invoke('cloud:disconnect'),
+  cloudIsConfigured: () => ipcRenderer.invoke('cloud:isConfigured'),
 });
 
 contextBridge.exposeInMainWorld('winControl', {

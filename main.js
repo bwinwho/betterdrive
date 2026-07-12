@@ -1,11 +1,35 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
+const http = require('http');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 
 let win;
 const ROOT = path.join(app.getPath('documents'), 'BetterDrive');
+
+/* ---------- Google OAuth config for the Cloud world ----------
+   Precedence: real env var > .env (gitignored, for local dev, see .env.example)
+   > google-config.js (tracked, empty by default — the release workflow
+   overwrites it from repository secrets right before packaging, so the
+   shipped .exe has working credentials without ever committing them). */
+(function loadDotEnv(){
+  try{
+    const text = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+    for(const line of text.split(/\r?\n/)){
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+      if(!m) continue;
+      let val = m[2];
+      if(/^".*"$/.test(val) || /^'.*'$/.test(val)) val = val.slice(1, -1);
+      if(process.env[m[1]] === undefined) process.env[m[1]] = val;
+    }
+  }catch(e){ /* no .env present — falls back to google-config.js */ }
+})();
+let googleConfigFile = {};
+try{ googleConfigFile = require('./google-config.js'); }catch(e){}
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || googleConfigFile.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || googleConfigFile.GOOGLE_CLIENT_SECRET || '';
 
 function guessMime(name) {
   const ext = path.extname(name).toLowerCase().slice(1);
@@ -402,3 +426,115 @@ ipcMain.handle('fs:searchPC', async (e, query) => {
   }
   return out;
 });
+
+/* ---------- Google Drive "Cloud" world — OAuth 2.0 (PKCE + loopback redirect) ----------
+   The renderer runs over file://, which Google's Identity Services / GIS token
+   client refuses to work with (it requires a real http(s) origin registered in
+   Google Cloud Console). The standard fix for installed/desktop apps is exactly
+   this: open the system browser to Google's consent screen, catch the redirect
+   on a local loopback server, and exchange the code for tokens ourselves. */
+const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const CLOUD_SCOPE = 'https://www.googleapis.com/auth/drive';
+const LOOPBACK_PORT = 53682; // conventional fixed port for installed-app OAuth loopbacks
+
+function base64url(buf) { return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function makePkce() {
+  const verifier = base64url(crypto.randomBytes(32));
+  const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
+  return { verifier, challenge };
+}
+
+const TOKEN_PATH = path.join(app.getPath('userData'), 'cloud-tokens.json');
+function saveTokens(tok) {
+  const json = JSON.stringify(tok);
+  const data = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(json) : Buffer.from(json, 'utf8');
+  fs.writeFileSync(TOKEN_PATH, data);
+}
+function loadTokens() {
+  try {
+    const buf = fs.readFileSync(TOKEN_PATH);
+    const json = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(buf) : buf.toString('utf8');
+    return JSON.parse(json);
+  } catch (e) { return null; }
+}
+function clearTokens() { try { fs.unlinkSync(TOKEN_PATH); } catch (e) {} }
+
+async function tokenRequest(params) {
+  const body = new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, ...params });
+  if (GOOGLE_CLIENT_SECRET) body.set('client_secret', GOOGLE_CLIENT_SECRET);
+  const r = await fetch(GOOGLE_TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error_description || d.error || ('Google token request failed (' + r.status + ')'));
+  return d;
+}
+
+const PAGE_STYLE = 'font-family:-apple-system,Segoe UI,sans-serif;background:#0a0a09;color:#eae4d6;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-size:15px';
+function connectPage(msg) { return `<body style="${PAGE_STYLE}"><div>${msg}</div></body>`; }
+
+let connectInFlight = null;
+ipcMain.handle('cloud:connect', () => {
+  if (!connectInFlight) connectInFlight = doCloudConnect().finally(() => { connectInFlight = null; });
+  return connectInFlight;
+});
+function doCloudConnect() {
+  return new Promise((resolve, reject) => {
+    if (!GOOGLE_CLIENT_ID) return reject(new Error('BetterDrive has no Google Client ID configured'));
+    const { verifier, challenge } = makePkce();
+    let usedPort = LOOPBACK_PORT;
+    let settled = false;
+    const finish = (fn, arg) => { if (settled) return; settled = true; clearTimeout(timer); try { server.close(); } catch (e) {} fn(arg); };
+
+    const server = http.createServer((req, res) => {
+      let u;
+      try { u = new URL(req.url, `http://127.0.0.1:${usedPort}`); } catch (e) { res.end(); return; }
+      const authErr = u.searchParams.get('error');
+      const code = u.searchParams.get('code');
+      if (authErr) {
+        res.writeHead(200, { 'Content-Type': 'text/html' }); res.end(connectPage('Sign-in cancelled — you can close this tab.'));
+        return finish(reject, new Error('Sign-in was cancelled'));
+      }
+      if (!code) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(connectPage('Connected — you can close this tab and go back to BetterDrive.'));
+      const redirectUri = `http://127.0.0.1:${usedPort}/`;
+      tokenRequest({ code, redirect_uri: redirectUri, grant_type: 'authorization_code', code_verifier: verifier })
+        .then(tok => {
+          saveTokens({ refresh_token: tok.refresh_token, access_token: tok.access_token, expiry: Date.now() + (tok.expires_in || 3600) * 1000 });
+          finish(resolve, { access_token: tok.access_token, expires_in: tok.expires_in });
+        })
+        .catch(e => finish(reject, e));
+    });
+
+    server.once('error', () => { usedPort = 0; server.listen(0, '127.0.0.1'); });
+    server.on('listening', () => {
+      usedPort = server.address().port;
+      const redirectUri = `http://127.0.0.1:${usedPort}/`;
+      const authUrl = GOOGLE_AUTH_URL + '?' + new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID, redirect_uri: redirectUri, response_type: 'code',
+        scope: CLOUD_SCOPE, access_type: 'offline', prompt: 'consent',
+        code_challenge: challenge, code_challenge_method: 'S256',
+      }).toString();
+      shell.openExternal(authUrl);
+    });
+    server.listen(usedPort, '127.0.0.1');
+
+    const timer = setTimeout(() => finish(reject, new Error('Sign-in timed out — try again')), 180000);
+  });
+}
+
+ipcMain.handle('cloud:token', async () => {
+  const stored = loadTokens();
+  if (!stored) return null;
+  if (stored.access_token && stored.expiry && Date.now() < stored.expiry - 60000) {
+    return { access_token: stored.access_token, expires_in: Math.round((stored.expiry - Date.now()) / 1000) };
+  }
+  if (!stored.refresh_token) return null;
+  try {
+    const tok = await tokenRequest({ refresh_token: stored.refresh_token, grant_type: 'refresh_token' });
+    saveTokens({ refresh_token: stored.refresh_token, access_token: tok.access_token, expiry: Date.now() + (tok.expires_in || 3600) * 1000 });
+    return { access_token: tok.access_token, expires_in: tok.expires_in };
+  } catch (e) { return null; } // refresh failed (revoked?) — renderer falls back to an interactive connect
+});
+ipcMain.handle('cloud:disconnect', () => clearTokens());
+ipcMain.handle('cloud:isConfigured', () => !!GOOGLE_CLIENT_ID);

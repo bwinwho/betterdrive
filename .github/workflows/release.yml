@@ -21,6 +21,18 @@ jobs:
 
       - run: npm install
 
+      - name: Inject Google OAuth config
+        shell: bash
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          node -e "
+            const fs=require('fs');
+            const cfg={GOOGLE_CLIENT_ID:process.env.GOOGLE_CLIENT_ID||'',GOOGLE_CLIENT_SECRET:process.env.GOOGLE_CLIENT_SECRET||''};
+            fs.writeFileSync('google-config.js','module.exports = '+JSON.stringify(cfg,null,2)+';\n');
+          "
+
       - name: Build and publish to GitHub Releases
         run: npx electron-builder --win --publish always
         env:

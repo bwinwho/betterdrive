@@ -12,8 +12,9 @@ It's an Electron app. It's fast where it needs to be, pretty where it counts, an
 
 ## What it actually does
 
-- **Worlds instead of a sidebar.** Recent, Favourites, Downloads, Pictures, Documents. Five tabs, bottom center, no clutter, no "add 47 more folders you'll never click again."
+- **Worlds instead of a sidebar.** Recent, Favourites, Downloads, Pictures, Documents, Cloud. Six tabs, bottom center, no clutter, no "add 47 more folders you'll never click again."
 - **Recent is actually recent.** Pulls real Windows Recent Items, not just files you happened to open inside the app.
+- **Cloud is your actual Google Drive**, full read/write, connected with one click. Star a file anywhere and it quietly syncs up to Drive in the background too, no extra step.
 - **Favourites with a gold border**, because starring something and having it look exactly like everything else is pointless.
 - **Full screen everything.** Images get a proper viewer with arrow-key navigation. Video, audio, text, and PDFs open full screen instead of squinting at a sidebar.
 - **.exe runs, .zip extracts**, and then it drops you straight into the extracted folder instead of leaving you to go find it yourself like some kind of animal.
@@ -38,6 +39,8 @@ npm start
 ```
 
 Needs a real Windows machine (or Windows VM) to get real shell icons and drive info out of it. It'll still run elsewhere, just won't feel as native.
+
+Want the Cloud world working on your own build? Copy `.env.example` to `.env` and drop in your own Google OAuth client (type **Desktop app**, from the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)). `.env` is gitignored on purpose, your keys never end up in git history. Skip this and Cloud just shows a "not configured" message instead of blowing up, everything else works fine without it.
 
 ## Building your own installer
 
