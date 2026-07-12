@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, protocol } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -23,14 +23,37 @@ const ROOT = path.join(app.getPath('documents'), 'BetterDrive');
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ]);
+/* Content-Type matters more than it looks like it should here: browsers
+   strictly refuse to execute a <script type="module"> or a `new Worker(url,
+   {type:'module'})` unless the response's Content-Type is a real JS MIME
+   type — this is exactly the kind of thing that can make a worker (like
+   pdf.js's) hang forever waiting for a response that never comes, with no
+   error surfaced anywhere. Setting it explicitly by extension, rather than
+   trusting automatic sniffing, removes that as a variable entirely. */
+const MIME_TYPES = {
+  '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
+  '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2',
+};
 function registerAppProtocol() {
-  protocol.handle('app', (request) => {
+  protocol.handle('app', async (request) => {
     const url = new URL(request.url);
     let pathname = decodeURIComponent(url.pathname);
     if (pathname === '' || pathname === '/') pathname = '/index.html';
     const filePath = path.join(__dirname, pathname);
     if (!filePath.startsWith(__dirname)) return new Response('Forbidden', { status: 403 });
-    return net.fetch('file://' + filePath);
+    try {
+      /* deliberately not net.fetch('file://'+filePath) — on Windows, path.join()
+         produces backslashes, and 'file://' + a backslash path is not a valid
+         file URL (needs url.pathToFileURL or, simpler, just read the bytes
+         ourselves and skip URL construction entirely). */
+      const data = await fsp.readFile(filePath);
+      const contentType = MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+      return new Response(data, { status: 200, headers: { 'Content-Type': contentType } });
+    } catch (e) {
+      return new Response('Not found', { status: 404 });
+    }
   });
 }
 
