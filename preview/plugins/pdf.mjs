@@ -8,6 +8,8 @@
    toolbar is the ONLY toolbar (no fighting Mozilla's iframed chrome), which is
    what makes "one consistent toolbar across every viewer" possible at all. */
 
+const esc = (s) => (s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 let pdfjsLib = null;
 let ViewerMod = null;
 let cssInjected = false;
@@ -15,8 +17,25 @@ let cssInjected = false;
 async function loadLibs() {
   if (!pdfjsLib) {
     pdfjsLib = await import('../../vendor/pdfjs/build/pdf.min.mjs');
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      new URL('../../vendor/pdfjs/build/pdf.worker.min.mjs', import.meta.url).href;
+    /* Worker loading is the single most fragile part of embedding pdf.js in
+       Electron — it has to work across file://, our custom app:// scheme, and
+       inside/outside asar, and a URL that's fine for a normal `<script>` fetch
+       can still silently fail to instantiate as a Worker (which is what left
+       the viewer hanging blank). The bulletproof approach: fetch the worker's
+       bytes ourselves and hand pdf.js a blob: URL. Blob URLs are same-origin
+       with this document and are universally instantiable as module workers no
+       matter what scheme the page itself was served from, sidestepping every
+       one of those environment quirks. The worker file is self-contained (its
+       only dynamic import is an optional JPEG2000 decoder, never hit by normal
+       PDFs), so a blob module worker runs it perfectly. */
+    const workerUrl = new URL('../../vendor/pdfjs/build/pdf.worker.min.mjs', import.meta.url).href;
+    try {
+      const workerCode = await (await fetch(workerUrl)).text();
+      const blob = new Blob([workerCode], { type: 'text/javascript' });
+      pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+    } catch (e) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl; // fall back to the direct URL if the fetch itself fails
+    }
   }
   if (!ViewerMod) {
     ViewerMod = await import('../../vendor/pdfjs/web/pdf_viewer.mjs');
@@ -172,7 +191,30 @@ export default {
     };
 
     const loadingTask = pdfjsLib.getDocument({ data: bytes });
-    const pdfDocument = await loadingTask.promise;
+    handle.loadingTask = loadingTask;
+    /* never hang blank: if the document (i.e. the worker) hasn't come back in
+       25s, show an error instead of sitting on an empty canvas forever. We
+       render the error ourselves and return a (degraded) handle rather than
+       throwing, so the engine still tracks this mount for teardown and the
+       preview panel's own action buttons ("Open with default app") stay usable. */
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Timed out loading the PDF (the render worker may have failed to start).')), 25000);
+    });
+    let pdfDocument;
+    try {
+      pdfDocument = await Promise.race([loadingTask.promise, timeout]);
+      clearTimeout(timeoutId);
+    } catch (e) {
+      clearTimeout(timeoutId);
+      el.root.querySelector('.bdpdf-body').innerHTML =
+        `<div style="margin:auto;text-align:center;color:var(--dim);font-size:13px;padding:48px 24px;max-width:420px">
+          <div style="font-family:var(--serif);font-size:22px;color:rgba(234,228,214,.55);margin-bottom:14px">Couldn't render this PDF</div>
+          <div style="opacity:.75;line-height:1.5">${esc(e.message || 'Unknown error')}</div>
+          <div style="opacity:.6;margin-top:12px">Try “Open with default app” below.</div>
+        </div>`;
+      return handle; // degraded handle: unmount() tolerates a null pdfDocument
+    }
     handle.pdfDocument = pdfDocument;
     pdfViewer.setDocument(pdfDocument);
     linkService.setDocument(pdfDocument, null);
@@ -269,6 +311,7 @@ export default {
     clearTimeout(handle.saveTimer);
     handle.abortController.abort();
     handle.thumbObserver?.disconnect();
+    try { await handle.loadingTask?.destroy(); } catch (e) { /* covers the case where the doc never finished loading (timeout/failure) */ }
     try { await handle.pdfDocument?.destroy(); } catch (e) { /* already gone */ }
     handle.el.printContainer?.remove(); // body-level, not a descendant of #pv-body — must remove explicitly
   },
