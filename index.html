@@ -215,20 +215,6 @@ input{font-family:inherit;color:inherit}
 
 .grid-folders{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(420px,100%),1fr));gap:18px}
 .grid-files{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(290px,100%),1fr));gap:14px}
-/* Pictures world: a proper photo grid (big square tiles, full-bleed thumbnail,
-   caption overlay) instead of the generic file-card layout — same cards,
-   same wiring (selection/fav/rename/context-menu/thumbnail lazy-load all
-   reused as-is from fileCard()), just a different container class + skin. */
-.grid-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
-.grid-gallery .card.file{padding:0;aspect-ratio:1;display:flex;align-items:flex-end;animation-delay:calc(var(--i,0)*25ms)}
-.grid-gallery .card.file .lthumb-wrap{position:absolute;inset:0;width:100%;height:100%;margin:0;border-radius:4px}
-.grid-gallery .card.file .lthumb-wrap img{filter:none}
-.grid-gallery .card.file .typeglyph{margin:auto;position:relative;z-index:1}
-.grid-gallery .card.file .title{
-  position:relative;z-index:2;padding:8px 10px;font-size:12.5px;-webkit-line-clamp:1;min-height:0;
-  background:linear-gradient(to top,rgba(0,0,0,.68),transparent 85%);width:100%;
-}
-.grid-gallery .card.file .meta{display:none}
 
 .card{
   position:relative;background:var(--card);border:1px solid rgba(234,228,214,.17);border-radius:4px;
@@ -438,23 +424,6 @@ body.electron #preview{top:38px}
   position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
   font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--dim);opacity:.6;z-index:5;
 }
-/* TUI Image Editor overlay — its own full-screen surface (it needs the whole
-   viewport for its tool rail/canvas), stacked above the preview panel it was
-   opened from, but still framed by our own bar/buttons rather than any
-   chrome TUI ships itself. */
-#img-editor{
-  position:fixed;inset:0;z-index:80;background:var(--bg);
-  display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .25s var(--ease);
-}
-#img-editor.show{opacity:1;pointer-events:auto}
-.img-editor-bar{
-  display:flex;align-items:center;gap:14px;padding:14px 20px;flex-shrink:0;
-  border-bottom:1px solid var(--faint-2);background:var(--card);
-}
-.img-editor-bar .ttl{font-family:var(--serif);font-size:18px;flex:1;color:var(--cream);word-break:break-word}
-.img-editor-canvas{flex:1;min-height:0;position:relative}
-.img-editor-canvas .tui-image-editor-container{height:100%!important}
-#img-editor .loading{margin:auto}
 .pv-head{display:flex;align-items:flex-start;gap:14px;padding:26px 28px 0}
 .pv-head .ttl{font-family:var(--serif);font-size:clamp(24px,3vw,32px);font-weight:600;line-height:1.05;word-break:break-word;flex:1;text-shadow:0 0 24px rgba(246,242,230,.15)}
 .pv-close{font-family:var(--mono);font-size:11px;color:var(--dim);padding:8px 12px;border:1px solid var(--faint);border-radius:2px;transition:all .3s var(--ease)}
@@ -765,16 +734,6 @@ body.electron .wordmark{display:none}
   <div class="pv-body" id="pv-body"></div>
   <div class="pv-actions" id="pv-actions"></div>
 </aside>
-
-<!-- image editor (TUI Image Editor), opened via the Edit action on a local image preview -->
-<div id="img-editor">
-  <div class="img-editor-bar">
-    <div class="ttl" id="img-editor-title"></div>
-    <button class="iconbtn" id="img-editor-cancel">Cancel</button>
-    <button class="btn solid" id="img-editor-save" style="padding:10px 22px">Save</button>
-  </div>
-  <div class="img-editor-canvas" id="img-editor-canvas"><div class="loading">Loading editor</div></div>
-</div>
 
 <!-- modal -->
 <div id="modal-scrim"><div id="modal"></div></div>
@@ -1366,23 +1325,10 @@ function renderStage(animate=true){
     folders.forEach(f=> g.appendChild(folderCard(f, i++, ++num)));
     frag.appendChild(g);
   }
-  /* Pictures world: photos get a proper gallery grid (big square tiles) —
-     same fileCard()s, same selection/fav/rename/context-menu wiring, just a
-     different container skin. Any non-image file that ends up here (rare)
-     still gets the ordinary file-card grid below it. */
-  const inPicturesWorld = zone()?.osKey==='pictures';
-  const gallery = inPicturesWorld ? files.filter(f=>kind(f)==='image') : [];
-  const plainFiles = inPicturesWorld ? files.filter(f=>kind(f)!=='image') : files;
-  if(gallery.length){
-    const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Photos'; frag.appendChild(lbl);
-    const g=document.createElement('div'); g.className='grid-gallery';
-    gallery.forEach(f=> g.appendChild(fileCard(f, i++, ++num)));
-    frag.appendChild(g);
-  }
-  if(plainFiles.length){
-    const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent=gallery.length?'Other files':'Files'; frag.appendChild(lbl);
+  if(files.length){
+    const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Files'; frag.appendChild(lbl);
     const g=document.createElement('div'); g.className='grid-files';
-    plainFiles.forEach(f=> g.appendChild(fileCard(f, i++, ++num)));
+    files.forEach(f=> g.appendChild(fileCard(f, i++, ++num)));
     frag.appendChild(g);
   }
   if(!folders.length && !files.length){
@@ -2069,8 +2015,7 @@ $('#btn-link').onclick=()=> newLinkFlow();
 
 /* ================= PREVIEW ================= */
 const FULLSCREEN_KINDS = ['image','video','audio','text','pdf'];
-async function openPreview(f){
-  await window.PreviewEngine?.unmountCurrent?.(); // release whatever the last preview mounted (worker/canvas/etc) before we overwrite it
+function openPreview(f){
   S.pvFile=f;
   const k=kind(f);
   $('#preview').classList.toggle('pv-fullscreen', FULLSCREEN_KINDS.includes(k));
@@ -2083,19 +2028,13 @@ async function openPreview(f){
   if(S.pvObjectUrl){ URL.revokeObjectURL(S.pvObjectUrl); S.pvObjectUrl=null; }
 
   if(k==='image'){
-    /* PhotoSwipe (Core layer) via the Preview Engine — zoom/pan/swipe and,
-       for local folders, in-place prev/next through every sibling photo
-       without a full remount. See preview/plugins/image.mjs. */
     if(f._local){
-      const imgs=(S.displayOrder||[]).filter(x=>kind(x)==='image');
-      const items = imgs.length ? imgs.map(x=>({id:x.id, src:toFileUrl(x.id), alt:x.name})) : [{id:f.id, src:toFileUrl(f.id), alt:f.name}];
-      const index = Math.max(0, items.findIndex(x=>x.id===f.id));
-      window.PreviewEngine.openInEngine('image', f, body, { items, index })
-        .catch(()=>{ if(S.pvFile?.id===f.id) body.innerHTML=`<div class="loading">Could not load image</div>`; });
+      body.innerHTML=`<img src="${toFileUrl(f.id)}" alt="" onerror="this.parentElement.innerHTML='&lt;div class=&quot;loading&quot;&gt;Could not load image&lt;/div&gt;'">`;
+      wireImageNav(body,f);
     } else {
       fetchBlob(f.id).then(b=>{ if(S.pvFile?.id!==f.id) return;
-        S.pvObjectUrl=URL.createObjectURL(b);
-        return window.PreviewEngine.openInEngine('image', f, body, { items:[{id:f.id, src:S.pvObjectUrl, alt:f.name}], index:0 });
+        S.pvObjectUrl=URL.createObjectURL(b); body.innerHTML=`<img src="${S.pvObjectUrl}" alt="">`;
+        wireImageNav(body,f);
       }).catch(()=> driveOpenExternal(body,f));
     }
   }
@@ -2131,27 +2070,18 @@ async function openPreview(f){
       }).catch(()=> driveOpenExternal(body,f));
     }
   }
-  else if(k==='pdf'){
-    /* pdf.js (Components layer) via the Preview Engine — real thumbnails,
-       search, zoom, page nav and printing, for both local and Drive-backed
-       files. See preview/plugins/pdf.mjs. */
-    const bytesPromise = f._local ? window.localFS.readFile(f.id) : fetchBlob(f.id).then(b=>b.arrayBuffer());
-    bytesPromise.then(arrayBuffer=>{ if(S.pvFile?.id!==f.id) return;
-      return window.PreviewEngine.openInEngine('pdf', f, body, { arrayBuffer });
-    }).catch(e=>{
-      if(S.pvFile?.id!==f.id) return;
-      if(f._local) body.innerHTML=`<div class="loading">Could not load PDF — ${esc(e.message||'')}</div>`;
-      else driveOpenExternal(body,f);
-    });
-  }
-  else if(k==='gdoc'){
-    /* Docs/Sheets/Slides have no raw bytes to fetch — export to PDF instead,
-       still through our own token, never Google's hosted editor. */
-    exportBlob(f.id,'application/pdf').then(b=>{ if(S.pvFile?.id!==f.id) return;
-      S.pvObjectUrl=URL.createObjectURL(b);
-      body.innerHTML=`<iframe src="${S.pvObjectUrl}"></iframe>`;
-      wireIframeEscape(body.querySelector('iframe'));
-    }).catch(()=> driveOpenExternal(body,f));
+  else if(k==='pdf'||k==='gdoc'){
+    if(f._local){ embedFallback(body,f); }
+    else{
+      /* Docs/Sheets/Slides have no raw bytes to fetch — export to PDF instead,
+         still through our own token, never Google's hosted editor. */
+      const blobPromise = k==='gdoc' ? exportBlob(f.id,'application/pdf') : fetchBlob(f.id);
+      blobPromise.then(b=>{ if(S.pvFile?.id!==f.id) return;
+        S.pvObjectUrl=URL.createObjectURL(b);
+        body.innerHTML=`<iframe src="${S.pvObjectUrl}"></iframe>`;
+        wireIframeEscape(body.querySelector('iframe'));
+      }).catch(()=> driveOpenExternal(body,f));
+    }
   }
   else if(k==='text'){
     if(f._local){ embedFallback(body,f); }
@@ -2168,7 +2098,6 @@ async function openPreview(f){
   $('#pv-actions').innerHTML='';
   const acts=[
     ...(k==='text' && f._local ? [{l:'Save', fn:()=>{ $('#pv-editor')?._save?.(); }}] : []),
-    ...(k==='image' && f._local ? [{l:'Edit', fn:()=> openImageEditor(f)}] : []),
     ...(f._local
       ? [{l:'Open with default app', fn:()=> window.localFS.openPath(f.id)}, {l:'Show in folder', fn:()=> window.localFS.showInFolder(f.id)}]
       : [{l:'Open in Drive ↗', fn:()=>window.open(f.webViewLink,'_blank')}, {l:'Download', fn:()=>downloadFlow(f)}]),
@@ -2210,6 +2139,17 @@ async function openTextEditor(body, f){
   ta.focus();
 }
 
+function wireImageNav(body,f){
+  const imgs=(S.displayOrder||[]).filter(x=>kind(x)==='image');
+  const idx=imgs.findIndex(x=>x.id===f.id);
+  if(idx<0 || imgs.length<2) return;
+  const prev=document.createElement('button'); prev.className='pv-nav prev'; prev.innerHTML='‹';
+  const next=document.createElement('button'); next.className='pv-nav next'; next.innerHTML='›';
+  const counter=document.createElement('div'); counter.className='pv-counter'; counter.textContent=(idx+1)+' / '+imgs.length;
+  prev.onclick=e=>{ e.stopPropagation(); openPreview(imgs[(idx-1+imgs.length)%imgs.length]); };
+  next.onclick=e=>{ e.stopPropagation(); openPreview(imgs[(idx+1)%imgs.length]); };
+  body.append(prev,next,counter);
+}
 /* an iframe's content is a separate document — Escape pressed inside it never
    bubbles to our window-level keydown listener. This works for both local
    file:// PDFs and Drive-exported blob: PDFs (both same-origin with the page
@@ -2227,6 +2167,9 @@ function embedFallback(body,f){
   const k=kind(f);
   if(k==='video'){
     body.innerHTML=`<video src="${toFileUrl(f.id)}" controls autoplay style="width:100%;height:100%;object-fit:contain"></video>`;
+  } else if(k==='pdf'){
+    body.innerHTML=`<iframe src="${toFileUrl(f.id)}"></iframe>`;
+    wireIframeEscape(body.querySelector('iframe'));
   } else if(k==='text'){
     openTextEditor(body, f);
   } else {
@@ -2248,7 +2191,6 @@ function driveOpenExternal(body,f){
   body.querySelector('#pv-open-external').onclick = ()=> window.open(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'), '_blank');
 }
 function closePreview(){
-  window.PreviewEngine?.unmountCurrent?.(); // release whatever's mounted (worker/canvas/etc) when dismissed without opening anything new
   $('#scrim').classList.remove('show'); $('#preview').classList.remove('show');
   const a=$('#p-audio'); if(a) a.pause();
   if(S.pvObjectUrl){ setTimeout(()=>{URL.revokeObjectURL(S.pvObjectUrl); S.pvObjectUrl=null;},600); }
@@ -2259,86 +2201,6 @@ $('#pv-close').onclick=closePreview; $('#scrim').onclick=closePreview;
    focused child (e.g. the text editor textarea) ever stops it from bubbling
    up to the window-level handler */
 $('#preview').addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePreview(); } }, true);
-
-/* ================= IMAGE EDITOR (TUI Image Editor) ================= */
-/* Classic UMD scripts, not ES modules — tui-image-editor exposes window.tui.ImageEditor
-   and only depends on tui-color-picker being loaded first (fabric.js and
-   tui-code-snippet are bundled inside tui-image-editor's own dist file, confirmed
-   by inspecting its UMD wrapper). Loaded lazily on first Edit click, once per
-   session, via plain injected <script> tags — mixing classic scripts into a
-   page that also has a <script type="module"> bootstrap elsewhere is fine,
-   they don't interact. */
-const loadedScripts=new Set();
-function loadScriptOnce(src){
-  if(loadedScripts.has(src)) return Promise.resolve();
-  return new Promise((resolve,reject)=>{
-    const s=document.createElement('script'); s.src=src;
-    s.onload=()=>{ loadedScripts.add(src); resolve(); };
-    s.onerror=()=> reject(new Error('Failed to load '+src));
-    document.head.appendChild(s);
-  });
-}
-function loadCssOnce(href){
-  if(loadedScripts.has(href)) return;
-  loadedScripts.add(href);
-  const l=document.createElement('link'); l.rel='stylesheet'; l.href=href;
-  document.head.appendChild(l);
-}
-let tuiEditorInstance=null;
-async function openImageEditor(f){
-  const overlay=$('#img-editor'), canvas=$('#img-editor-canvas');
-  $('#img-editor-title').textContent=f.name;
-  canvas.innerHTML='<div class="loading">Loading editor</div>';
-  overlay.classList.add('show');
-  try{
-    loadCssOnce('vendor/tui-image-editor/tui-color-picker.min.css');
-    loadCssOnce('vendor/tui-image-editor/tui-image-editor.min.css');
-    await loadScriptOnce('vendor/tui-image-editor/tui-color-picker.min.js');
-    await loadScriptOnce('vendor/tui-image-editor/tui-image-editor.min.js');
-  }catch(e){
-    canvas.innerHTML=`<div class="loading">Could not load the image editor — ${esc(e.message||'')}</div>`;
-    return;
-  }
-  if($('#img-editor-title').textContent!==f.name || !overlay.classList.contains('show')) return; // closed while loading
-  canvas.innerHTML='';
-  try{
-    tuiEditorInstance = new tui.ImageEditor(canvas, {
-      includeUI:{
-        loadImage:{ path: toFileUrl(f.id), name: f.name },
-        menuBarPosition:'bottom', // TUI's own default (included) theme is already dark, close enough to the app's palette without hand-tuning ~40 theme keys blind
-      },
-      cssMaxWidth: canvas.clientWidth,
-      cssMaxHeight: canvas.clientHeight,
-      usageStatistics:false,
-    });
-  }catch(e){
-    canvas.innerHTML=`<div class="loading">Could not open this image for editing — ${esc(e.message||'')}</div>`;
-  }
-}
-function closeImageEditor(){
-  $('#img-editor').classList.remove('show');
-  try{ tuiEditorInstance?.destroy(); }catch(e){}
-  tuiEditorInstance=null;
-}
-$('#img-editor-cancel').onclick=closeImageEditor;
-$('#img-editor-save').onclick=async ()=>{
-  if(!tuiEditorInstance) return;
-  const f=S.pvFile; if(!f) return closeImageEditor();
-  const btn=$('#img-editor-save'); btn.disabled=true; btn.textContent='Saving…';
-  try{
-    const dataUrl=tuiEditorInstance.toDataURL({format: /\.png$/i.test(f.name)?'png':'jpeg'});
-    const buf=await (await fetch(dataUrl)).arrayBuffer();
-    await window.localFS.writeFile(f.id, buf);
-    delete S.cache[currentFolderId()];
-    closeImageEditor();
-    toast('Image saved');
-    openPreview(f); // re-open so the edited version is what's shown
-  }catch(e){
-    btn.disabled=false; btn.textContent='Save';
-    toast('Save failed — '+(e.message||''), true);
-  }
-};
-document.addEventListener('keydown', e=>{ if(e.key==='Escape' && $('#img-editor').classList.contains('show')){ e.stopPropagation(); closeImageEditor(); } }, true);
 
 /* ================= SEARCH ================= */
 let searchTimer=null, searchSeq=0;
@@ -2512,9 +2374,13 @@ addEventListener('keydown', e=>{
     if(S.keyMode==='browse'){ S.keyMode='worlds'; syncKB(); } /* root: drop back to world-select */
     return;
   }
-  /* image prev/next is now handled by PhotoSwipe itself (preview/plugins/image.mjs
-     mounts once with every sibling and binds its own arrow-key/swipe nav —
-     no full remount per image anymore), so no app-level handler is needed here. */
+  if((e.key==='ArrowLeft'||e.key==='ArrowRight') && $('#preview').classList.contains('show') && S.pvFile && kind(S.pvFile)==='image'){
+    e.preventDefault();
+    const imgs=(S.displayOrder||[]).filter(x=>kind(x)==='image');
+    const idx=imgs.findIndex(x=>x.id===S.pvFile.id);
+    if(idx>=0 && imgs.length>1) openPreview(imgs[(idx+(e.key==='ArrowRight'?1:-1)+imgs.length)%imgs.length]);
+    return;
+  }
   if(isTyping() || modalOpen) return; /* digits/backspace belong to the input */
 
   if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='c' && !S.searching){
@@ -2839,14 +2705,6 @@ function wireTitlebar(){
     $('#tb-max').title = state==='maximized' ? 'Restore' : 'Maximize';
   });
 }
-</script>
-<!-- Preview Engine: a real ES module, exposed onto window so the classic
-     script above (openPreview/closePreview) can call into it. The engine
-     itself lazily import()s one plugin module per file kind — nothing here
-     costs anything until a matching file is actually previewed. -->
-<script type="module">
-  import * as PreviewEngine from './preview/engine.mjs';
-  window.PreviewEngine = PreviewEngine;
 </script>
 </body>
 </html>

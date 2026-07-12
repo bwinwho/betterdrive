@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -8,54 +8,6 @@ const { execFile } = require('child_process');
 
 let win;
 const ROOT = path.join(app.getPath('documents'), 'BetterDrive');
-
-/* ---------- app:// — serving our own files over a real (non-file://) scheme ----------
-   The Preview Engine (preview/engine.mjs and friends) uses real ES module
-   `import()` for lazy-loading plugins. Chromium refuses to fetch module
-   imports from a file:// origin at all (a real, confirmed restriction — it's
-   not about our code, it's Chromium treating file:// pages as origin "null"
-   and blocking any module-fetch from there, full stop). A privileged custom
-   scheme sidesteps this exactly the way most modern Electron apps do.
-   This only changes how *our own* app files (index.html, preview/*, vendor/*)
-   are served — local user files previewed via <img>/<video>/<audio> src
-   (toFileUrl() in index.html) are plain resource loads, not module fetches,
-   completely unaffected, and keep using file:// URLs exactly as before. */
-protocol.registerSchemesAsPrivileged([
-  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
-]);
-/* Content-Type matters more than it looks like it should here: browsers
-   strictly refuse to execute a <script type="module"> or a `new Worker(url,
-   {type:'module'})` unless the response's Content-Type is a real JS MIME
-   type — this is exactly the kind of thing that can make a worker (like
-   pdf.js's) hang forever waiting for a response that never comes, with no
-   error surfaced anywhere. Setting it explicitly by extension, rather than
-   trusting automatic sniffing, removes that as a variable entirely. */
-const MIME_TYPES = {
-  '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
-  '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
-  '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2',
-};
-function registerAppProtocol() {
-  protocol.handle('app', async (request) => {
-    const url = new URL(request.url);
-    let pathname = decodeURIComponent(url.pathname);
-    if (pathname === '' || pathname === '/') pathname = '/index.html';
-    const filePath = path.join(__dirname, pathname);
-    if (!filePath.startsWith(__dirname)) return new Response('Forbidden', { status: 403 });
-    try {
-      /* deliberately not net.fetch('file://'+filePath) — on Windows, path.join()
-         produces backslashes, and 'file://' + a backslash path is not a valid
-         file URL (needs url.pathToFileURL or, simpler, just read the bytes
-         ourselves and skip URL construction entirely). */
-      const data = await fsp.readFile(filePath);
-      const contentType = MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
-      return new Response(data, { status: 200, headers: { 'Content-Type': contentType } });
-    } catch (e) {
-      return new Response('Not found', { status: 404 });
-    }
-  });
-}
 
 /* ---------- Google OAuth config for the Cloud world ----------
    Precedence: real env var > .env (gitignored, for local dev, see .env.example)
@@ -157,7 +109,7 @@ function scheduleSuspendCheck(delay) {
     if (!win || win.isDestroyed() || win.isFocused()) return;
     if (!safe) { scheduleSuspendCheck(SAFETY_RECHECK_MS); return; }
     suspended = true;
-    win.loadURL('app://bd/standby.html');
+    win.loadFile('standby.html');
   }, delay);
 }
 
@@ -169,7 +121,7 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: true },
   });
   win.once('ready-to-show', () => win.show());
-  win.loadURL('app://bd/index.html');
+  win.loadFile('index.html');
   /* window.open() calls (Open in Drive, saved link cards) have no explicit
      handler by default, which would pop an unhardened Electron window with no
      browser session — Google's own pages would then demand a fresh sign-in
@@ -181,12 +133,11 @@ function createWindow() {
   win.on('blur', () => { if (!suspended) scheduleSuspendCheck(SUSPEND_DELAY_MS); });
   win.on('focus', () => {
     clearTimeout(suspendTimer);
-    if (suspended) { suspended = false; win.loadURL('app://bd/index.html'); }
+    if (suspended) { suspended = false; win.loadFile('index.html'); }
   });
 }
 
 app.whenReady().then(async () => {
-  registerAppProtocol();
   await ensureDir(ROOT);
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
