@@ -1092,6 +1092,18 @@ async function fetchBlob(id, onProgress, attempt=0){
   while(true){ const {done,value}=await reader.read(); if(done) break; chunks.push(value); got+=value.length; if(total) onProgress(got/total); }
   return new Blob(chunks);
 }
+/* Google Docs/Sheets/Slides have no raw downloadable bytes — they only support
+   exporting to a real format, via our own OAuth token (no separate browser
+   sign-in needed, unlike Google's hosted viewer/editor). */
+async function exportBlob(id, mimeType, attempt=0){
+  await getToken(false);
+  let r;
+  try{ r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}/export?mimeType=${encodeURIComponent(mimeType)}`,{headers:{Authorization:'Bearer '+S.token}}); }
+  catch(e){ if(attempt<2){ await sleep(600*(attempt+1)); return exportBlob(id,mimeType,attempt+1); } throw new Error('Network error — check connection'); }
+  if(r.status===401 && attempt<2){ S.token=null; return exportBlob(id,mimeType,attempt+1); }
+  if(!r.ok) throw new Error('Export failed');
+  return r.blob();
+}
 async function driveSearch(query){
   const safe = query.replace(/['\\]/g,'');
   const q = encodeURIComponent(`name contains '${safe}' and trashed=false`);
@@ -1519,14 +1531,26 @@ $('#stage').addEventListener('pointermove', e=>{
 /* ================= NAVIGATION ================= */
 function syncKB(){ document.body.classList.toggle('kbrowse', S.searching || !atZoneRoot() || S.keyMode==='browse'); }
 function isCloudZone(z){ return !!z && z.type==='drive' && z.driveId==='root'; }
+/* the persisted "connected" flag can go stale (token revoked elsewhere, expired
+   refresh token) — re-verify for real every time, rather than trusting it and
+   letting a cached Cloud listing flash on screen before a doomed fetch reveals
+   the token is actually dead. */
+async function verifyCloudConnected(){
+  if(!S.cloudConnected) return false;
+  try{ await getCloudToken(false); return true; }
+  catch(e){ return false; } // getCloudToken already flips S.cloudConnected=false on failure
+}
 async function openZone(zoneId){
   S.activeZoneId=zoneId; persistCore();
   const z=zone();
   S.path=[{id: zoneRootId(z), name:z.name, type:z.type||'drive'}];
   S.keyMode='worlds'; syncKB();
   renderZoneBar();
-  if(isCloudZone(z) && !S.cloudConnected){ renderCloudConnectPrompt(); return; }
-  if(isCloudZone(z)) await ensureCloudReady();
+  if(isCloudZone(z)){
+    const connected = await verifyCloudConnected();
+    if(!connected){ renderCloudConnectPrompt(); return; }
+    await ensureCloudReady();
+  }
   await loadCurrent();
 }
 function renderCloudConnectPrompt(){
@@ -2011,7 +2035,7 @@ function openPreview(f){
       fetchBlob(f.id).then(b=>{ if(S.pvFile?.id!==f.id) return;
         S.pvObjectUrl=URL.createObjectURL(b); body.innerHTML=`<img src="${S.pvObjectUrl}" alt="">`;
         wireImageNav(body,f);
-      }).catch(()=> embedFallback(body,f));
+      }).catch(()=> driveOpenExternal(body,f));
     }
   }
   else if(k==='audio'){
@@ -2034,10 +2058,41 @@ function openPreview(f){
     else{
       fetchBlob(f.id).then(b=>{ if(S.pvFile?.id!==f.id) return;
         S.pvObjectUrl=URL.createObjectURL(b); setupAudio(S.pvObjectUrl);
-      }).catch(()=> embedFallback(body,f));
+      }).catch(()=> driveOpenExternal(body,f));
     }
   }
-  else if(k==='video'||k==='pdf'||k==='gdoc'||k==='text'){ embedFallback(body,f); }
+  else if(k==='video'){
+    if(f._local){ embedFallback(body,f); }
+    else{
+      fetchBlob(f.id).then(b=>{ if(S.pvFile?.id!==f.id) return;
+        S.pvObjectUrl=URL.createObjectURL(b);
+        body.innerHTML=`<video src="${S.pvObjectUrl}" controls autoplay style="width:100%;height:100%;object-fit:contain"></video>`;
+      }).catch(()=> driveOpenExternal(body,f));
+    }
+  }
+  else if(k==='pdf'||k==='gdoc'){
+    if(f._local){ embedFallback(body,f); }
+    else{
+      /* Docs/Sheets/Slides have no raw bytes to fetch — export to PDF instead,
+         still through our own token, never Google's hosted editor. */
+      const blobPromise = k==='gdoc' ? exportBlob(f.id,'application/pdf') : fetchBlob(f.id);
+      blobPromise.then(b=>{ if(S.pvFile?.id!==f.id) return;
+        S.pvObjectUrl=URL.createObjectURL(b);
+        body.innerHTML=`<iframe src="${S.pvObjectUrl}"></iframe>`;
+        wireIframeEscape(body.querySelector('iframe'));
+      }).catch(()=> driveOpenExternal(body,f));
+    }
+  }
+  else if(k==='text'){
+    if(f._local){ embedFallback(body,f); }
+    else{
+      fetchBlob(f.id).then(async b=>{ if(S.pvFile?.id!==f.id) return;
+        const text = await b.text();
+        body.innerHTML = `<div class="editor-wrap"><textarea id="pv-editor" readonly spellcheck="false">${esc(text)}</textarea>
+          <div class="editor-status">Read-only — Drive text editing isn't wired up yet</div></div>`;
+      }).catch(()=> driveOpenExternal(body,f));
+    }
+  }
   else{ body.innerHTML=`<div style="text-align:center;padding:40px"><div class="typeglyph" style="font-size:13px;padding:10px 18px">${GLYPH[k]||'FILE'}</div><p style="margin-top:20px;color:var(--dim);font-size:13px">No inline preview for this type.</p></div>`; }
 
   $('#pv-actions').innerHTML='';
@@ -2096,33 +2151,44 @@ function wireImageNav(body,f){
   body.append(prev,next,counter);
 }
 /* an iframe's content is a separate document — Escape pressed inside it never
-   bubbles to our window-level keydown listener. Best-effort bridge for the
-   same-origin case (local PDFs); the Drive embed is cross-origin so this will
-   silently no-op there and the close button remains the reliable path. */
+   bubbles to our window-level keydown listener. This works for both local
+   file:// PDFs and Drive-exported blob: PDFs (both same-origin with the page
+   that created them); the close button remains the fallback either way. */
 function wireIframeEscape(iframe){
   iframe?.addEventListener('load', ()=>{
     try{ iframe.contentWindow.addEventListener('keydown', e=>{ if(e.key==='Escape') closePreview(); }); }
     catch(e){ /* cross-origin — nothing we can do from here */ }
   });
 }
+/* local-file preview only — Drive-backed files never reach here (openPreview
+   fetches their real bytes through our own OAuth token instead, see above),
+   so this never needs to embed anything that'd demand a separate sign-in. */
 function embedFallback(body,f){
-  if(f._local){
-    const k=kind(f);
-    if(k==='video'){
-      body.innerHTML=`<video src="${toFileUrl(f.id)}" controls autoplay style="width:100%;height:100%;object-fit:contain"></video>`;
-    } else if(k==='pdf'){
-      body.innerHTML=`<iframe src="${toFileUrl(f.id)}"></iframe>`;
-      wireIframeEscape(body.querySelector('iframe'));
-    } else if(k==='text'){
-      openTextEditor(body, f);
-    } else {
-      body.innerHTML=`<div style="text-align:center;padding:40px"><div class="typeglyph" style="font-size:13px;padding:10px 18px">${GLYPH[k]||'FILE'}</div>
-        <p style="margin-top:20px;color:var(--dim);font-size:13px">No inline preview — open with your default app instead.</p></div>`;
-    }
-    return;
+  const k=kind(f);
+  if(k==='video'){
+    body.innerHTML=`<video src="${toFileUrl(f.id)}" controls autoplay style="width:100%;height:100%;object-fit:contain"></video>`;
+  } else if(k==='pdf'){
+    body.innerHTML=`<iframe src="${toFileUrl(f.id)}"></iframe>`;
+    wireIframeEscape(body.querySelector('iframe'));
+  } else if(k==='text'){
+    openTextEditor(body, f);
+  } else {
+    body.innerHTML=`<div style="text-align:center;padding:40px"><div class="typeglyph" style="font-size:13px;padding:10px 18px">${GLYPH[k]||'FILE'}</div>
+      <p style="margin-top:20px;color:var(--dim);font-size:13px">No inline preview — open with your default app instead.</p></div>`;
   }
-  body.innerHTML=`<iframe src="https://drive.google.com/file/d/${f.id}/preview" allow="autoplay" loading="lazy"></iframe>`;
-  wireIframeEscape(body.querySelector('iframe'));
+}
+/* shown when a Drive file's bytes can't be fetched through our token (network
+   blip, permission edge case) — opens in the user's real browser instead of
+   ever embedding Google's own hosted viewer, which would demand a completely
+   separate sign-in Electron's isolated session has no way to satisfy. */
+function driveOpenExternal(body,f){
+  const k=kind(f);
+  body.innerHTML=`<div style="text-align:center;padding:40px">
+    <div class="typeglyph" style="font-size:13px;padding:10px 18px">${GLYPH[k]||'FILE'}</div>
+    <p style="margin-top:20px;color:var(--dim);font-size:13px">Couldn't preview this here — open it in your browser instead.</p>
+    <button class="btn solid" id="pv-open-external" style="margin-top:18px">Open in Drive ↗</button>
+  </div>`;
+  body.querySelector('#pv-open-external').onclick = ()=> window.open(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'), '_blank');
 }
 function closePreview(){
   $('#scrim').classList.remove('show'); $('#preview').classList.remove('show');

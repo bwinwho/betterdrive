@@ -122,6 +122,12 @@ function createWindow() {
   });
   win.once('ready-to-show', () => win.show());
   win.loadFile('index.html');
+  /* window.open() calls (Open in Drive, saved link cards) have no explicit
+     handler by default, which would pop an unhardened Electron window with no
+     browser session — Google's own pages would then demand a fresh sign-in
+     right inside that window. Send everything to the user's real, already
+     signed-in system browser instead. */
+  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.on('maximize', () => win.webContents.send('win:state', 'maximized'));
   win.on('unmaximize', () => win.webContents.send('win:state', 'normal'));
   win.on('blur', () => { if (!suspended) scheduleSuspendCheck(SUSPEND_DELAY_MS); });
