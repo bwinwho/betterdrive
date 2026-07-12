@@ -22,6 +22,8 @@ It's an Electron app. It's fast where it needs to be, pretty where it counts, an
 - **Drag and drop with a spring to it.** Cards lift when you grab them, drop targets bounce back. Small thing. Feels good anyway.
 - **Standby mode.** Click away for 45 seconds and it goes full "Taking a Power Nap ⚡" and lets your RAM breathe. Click back and it's instantly awake, no loading screen theatrics.
 - **Real Windows shell icons and real drive labels**, done through Electron's built in icon API and a PowerShell call, not some 200mb native addon that breaks on every Electron update.
+- **Color tags, your call.** Right-click anything, pick one of five dots (or clear it), and the card's border and hover-glow match. Yours to assign — not the automatic file-type tinting, a separate layer on top of it.
+- **HideOut.** A PIN-gated vault for the files you don't want showing up in a casual scroll — or in Windows Explorer at all. Lock icon next to the star on any file or folder moves it in; the HideOut button up top gets you back in, PIN required every time. Worth saying plainly: this is Windows' own hidden-file attribute plus an app-level PIN, not disk encryption. Anyone with "show hidden files" on or raw access to the drive can still find it.
 
 ## Why not just use Explorer
 

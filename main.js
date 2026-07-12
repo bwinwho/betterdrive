@@ -206,6 +206,96 @@ ipcMain.handle('fs:zip', (e, paths, destDir) => new Promise((resolve, reject) =>
   });
 }));
 
+/* ---------- HideOut: a PIN-gated vault for files the user wants out of normal
+   view. Honest scope: this hides files from Explorer using the standard
+   Windows "Hidden" file attribute and gates the app's own UI behind a PIN —
+   it is obscurity + a lock on the app, not disk encryption. Anyone with
+   "show hidden files" turned on in Explorer, or access to the raw disk,
+   can still see the files. The PIN itself is stored via safeStorage (same
+   OS-level encryption already used for the Cloud OAuth tokens above), not
+   as plaintext. ---------- */
+const HIDEOUT_DIR = path.join(ROOT, '.hideout');
+const HIDEOUT_PIN_PATH = path.join(app.getPath('userData'), 'hideout-pin.dat');
+const HIDEOUT_MANIFEST_PATH = path.join(app.getPath('userData'), 'hideout-manifest.json');
+
+function hideAttrib(targetPath) {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') return resolve();
+    execFile('attrib', ['+h', targetPath], () => resolve()); // best-effort — never blocks the operation on failure
+  });
+}
+function loadHideoutManifest() {
+  try { return JSON.parse(fs.readFileSync(HIDEOUT_MANIFEST_PATH, 'utf8')); } catch (e) { return {}; }
+}
+function saveHideoutManifest(m) {
+  try { fs.writeFileSync(HIDEOUT_MANIFEST_PATH, JSON.stringify(m)); } catch (e) {}
+}
+
+ipcMain.handle('hideout:hasPin', () => fs.existsSync(HIDEOUT_PIN_PATH));
+
+ipcMain.handle('hideout:setPin', async (e, pin) => {
+  const data = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(pin) : Buffer.from(pin, 'utf8');
+  fs.writeFileSync(HIDEOUT_PIN_PATH, data);
+  await ensureDir(HIDEOUT_DIR);
+  await hideAttrib(HIDEOUT_DIR);
+});
+
+ipcMain.handle('hideout:verifyPin', (e, pin) => {
+  try {
+    const buf = fs.readFileSync(HIDEOUT_PIN_PATH);
+    const stored = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(buf) : buf.toString('utf8');
+    return stored === pin;
+  } catch (e) { return false; }
+});
+
+ipcMain.handle('hideout:list', async () => {
+  await ensureDir(HIDEOUT_DIR);
+  const names = await fsp.readdir(HIDEOUT_DIR);
+  const out = [];
+  for (const name of names) {
+    const full = path.join(HIDEOUT_DIR, name);
+    try {
+      const st = await fsp.stat(full);
+      out.push({ name, path: full, isDir: st.isDirectory(), size: st.size, mtimeMs: st.mtimeMs, mime: st.isDirectory() ? null : guessMime(full) });
+    } catch (e) { /* vanished between readdir and stat — skip */ }
+  }
+  return out;
+});
+
+/* moves a file/folder into the vault, hides it, and remembers where it came
+   from so unlock() can put it back. Name collisions inside the vault get a
+   " (2)" suffix, same convention as extractZip/zip above. */
+ipcMain.handle('hideout:lock', async (e, targetPath) => {
+  await ensureDir(HIDEOUT_DIR);
+  await hideAttrib(HIDEOUT_DIR);
+  const base = path.basename(targetPath);
+  const ext = path.extname(base);
+  const stem = ext ? base.slice(0, -ext.length) : base;
+  let dest = path.join(HIDEOUT_DIR, base);
+  let n = 2;
+  while (fs.existsSync(dest)) { dest = path.join(HIDEOUT_DIR, `${stem} (${n})${ext}`); n++; }
+  const finalPath = await safeMove(targetPath, HIDEOUT_DIR);
+  const renamedPath = finalPath === dest ? finalPath : (await fsp.rename(finalPath, dest).then(() => dest).catch(() => finalPath));
+  await hideAttrib(renamedPath);
+  const manifest = loadHideoutManifest();
+  manifest[renamedPath] = path.dirname(targetPath);
+  saveHideoutManifest(manifest);
+  return renamedPath;
+});
+
+/* moves a vault file back to the folder it was locked from — or Documents/
+   BetterDrive itself if that folder no longer exists — and forgets it. */
+ipcMain.handle('hideout:unlock', async (e, hiddenPath) => {
+  const manifest = loadHideoutManifest();
+  let destDir = manifest[hiddenPath];
+  if (!destDir || !fs.existsSync(destDir)) destDir = ROOT;
+  await ensureDir(destDir);
+  const restored = await safeMove(hiddenPath, destDir);
+  delete manifest[hiddenPath];
+  saveHideoutManifest(manifest);
+  return restored;
+});
+
 /* ---------- Windows' own "Recent" list — the .lnk shortcuts Explorer/Office/etc.
    already drop into %AppData%/Microsoft/Windows/Recent every time any app opens a
    file. Resolving them via the WScript.Shell COM object (through PowerShell) needs
