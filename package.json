@@ -1,6 +1,6 @@
 {
   "name": "betterdrive",
-  "version": "1.7.3",
+  "version": "1.8.0",
   "description": "Your files, rebuilt beautiful.",
   "main": "main.js",
   "author": "Bwin31 / Kode31",
@@ -57,6 +57,9 @@
     }
   },
   "dependencies": {
-    "pdfjs-dist": "^5.4.624"
+    "pdfjs-dist": "^5.4.624",
+    "photoswipe": "^5.4.4",
+    "tui-image-editor": "^3.15.3",
+    "tui-color-picker": "^2.2.8"
   }
 }

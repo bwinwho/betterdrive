@@ -36,4 +36,19 @@ copy('pdfjs-dist/build/pdf.worker.min.mjs', 'pdfjs/build/pdf.worker.min.mjs');
 copy('pdfjs-dist/web/pdf_viewer.mjs', 'pdfjs/web/pdf_viewer.mjs');
 copy('pdfjs-dist/web/pdf_viewer.css', 'pdfjs/web/pdf_viewer.css');
 
+/* PhotoSwipe — Core (not Lightbox: we drive open/close from our own gallery
+   grid + toolbar, not by scanning DOM anchors), ESM build. */
+copy('photoswipe/dist/photoswipe.esm.min.js', 'photoswipe/photoswipe.esm.min.js');
+copy('photoswipe/dist/photoswipe.css', 'photoswipe/photoswipe.css');
+
+/* TUI Image Editor (UMD, classic scripts loaded lazily only when the Edit
+   button is used) + its one true external peer, tui-color-picker. fabric.js
+   and tui-code-snippet are bundled directly inside tui-image-editor's own
+   dist file (confirmed by inspecting its UMD wrapper — only tui-color-picker
+   is require()'d externally), so they're not vendored separately. */
+copy('tui-color-picker/dist/tui-color-picker.min.js', 'tui-image-editor/tui-color-picker.min.js');
+copy('tui-color-picker/dist/tui-color-picker.min.css', 'tui-image-editor/tui-color-picker.min.css');
+copy('tui-image-editor/dist/tui-image-editor.min.js', 'tui-image-editor/tui-image-editor.min.js');
+copy('tui-image-editor/dist/tui-image-editor.min.css', 'tui-image-editor/tui-image-editor.min.css');
+
 console.log('[vendor-libs] vendor/ ready:', VENDOR);

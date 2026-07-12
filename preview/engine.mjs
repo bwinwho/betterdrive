@@ -19,6 +19,7 @@
 
 const PLUGINS = {
   pdf: () => import('./plugins/pdf.mjs'),
+  image: () => import('./plugins/image.mjs'),
 };
 
 let current = null; // { kindName, plugin, handle }
@@ -43,7 +44,7 @@ export async function unmountCurrent() {
    (#pv-actions) — optional, plugins that build their own internal chrome
    (like the PDF one) can ignore it. */
 export async function openInEngine(kindName, file, container, opts = {}) {
-  const { arrayBuffer, toolbarEl } = opts;
+  const { toolbarEl, ...rest } = opts; // everything except toolbarEl is plugin-specific payload (arrayBuffer for pdf, items/index/src for image, …) and just passes through
   await unmountCurrent();
   const loader = PLUGINS[kindName];
   if (!loader) throw new Error('No preview-engine plugin registered for kind: ' + kindName);
@@ -51,8 +52,8 @@ export async function openInEngine(kindName, file, container, opts = {}) {
   const plugin = mod.default;
   const state = loadState(file);
   const handle = await plugin.mount(container, file, {
+    ...rest,
     state,
-    arrayBuffer,
     saveState: (next) => saveState(file, next),
   });
   current = { kindName, plugin, handle };
