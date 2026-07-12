@@ -216,6 +216,51 @@ input{font-family:inherit;color:inherit}
 .grid-folders{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(420px,100%),1fr));gap:18px}
 .grid-files{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(290px,100%),1fr));gap:14px}
 
+/* ============ MASONRY (bento-style browsing view) ============ */
+/* grid-auto-flow stays the default "row", never "dense" — the tiles must
+   appear in the exact order the current sort produced them in, even if that
+   leaves the odd small gap; visual density is worth less than a sort order
+   users can actually trust. */
+.masonry{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));grid-auto-rows:8px;gap:16px}
+.card.folder.manifest{grid-column:span 2;grid-row:span 40}
+.card.folder.album,.card.file.media{grid-column:span 1;grid-row:span 30;padding:0;display:flex;align-items:flex-end}
+.doc-cluster{grid-column:span 1;grid-row:span calc(var(--rows,1) * 8);display:flex;flex-direction:column;gap:8px}
+
+@media(max-width:640px){
+  .card.folder.manifest{grid-column:span 2}
+  .masonry{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+}
+
+/* manifest folder tile: icon/name/count as today's folder card, plus a
+   plain-text peek at what's inside once hydrateFolderMeta resolves */
+.card.folder.manifest .flist{margin-top:18px;display:flex;flex-direction:column;gap:7px}
+.card.folder.manifest .frow{
+  font-family:var(--mono);font-size:11.5px;color:rgba(234,228,214,.65);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  padding-bottom:7px;border-bottom:1px solid var(--faint);
+}
+.card.folder.manifest .frow:last-child{border-bottom:none}
+.card.folder.manifest .fmore{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;margin-top:2px}
+
+/* album-cover folder tile + single media file tile share the same full-bleed
+   cover + bottom gradient caption look */
+.card.folder.album .cover,.card.file.media .cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s var(--ease);background:rgba(234,228,214,.03)}
+.card.folder.album .cover.loaded,.card.file.media .cover.loaded{opacity:1}
+.card.folder.album .cover-glyph,.card.file.media .cover-glyph{margin:auto;position:relative;z-index:1}
+.card.folder.album .caption,.card.file.media .caption{
+  position:relative;z-index:2;width:100%;padding:14px 16px;
+  background:linear-gradient(to top,rgba(0,0,0,.72),transparent 90%);
+}
+.card.folder.album .caption .title,.card.file.media .caption .title{font-size:16px;font-weight:500;-webkit-line-clamp:1;min-height:0}
+.card.folder.album .caption .meta,.card.file.media .caption .meta{margin-top:4px;font-size:9px}
+
+/* compact document row — several of these stack inside one .doc-cluster cell */
+.card.docrow{padding:12px 90px 12px 16px;display:flex;align-items:center;gap:12px;flex:1;min-height:0}
+.card.docrow .typeglyph{margin:0;flex-shrink:0}
+.card.docrow .title{flex:1;min-width:0;font-size:14px;font-weight:500;-webkit-line-clamp:1;min-height:0}
+.card.docrow .meta{margin-top:0;flex-shrink:0;font-size:9px}
+.card.docrow .chev{position:absolute;right:14px;bottom:14px;color:var(--dim);font-size:16px;opacity:.5}
+
 .card{
   position:relative;background:var(--card);border:1px solid rgba(234,228,214,.17);border-radius:4px;
   padding:30px 32px;cursor:pointer;overflow:hidden;
@@ -1203,6 +1248,23 @@ function renderStage(animate=true){
   stage.classList.toggle('no-anim', !animate);
   if(S.searching) return;
   renderCrumb();
+  /* Recent is a flat, unrelated set of files gathered from all over — not "a
+     folder's contents" — so it keeps the plain sectioned grid. Every real
+     folder/world gets the masonry layout. */
+  if(zone()?.type==='recent') renderStageFlat();
+  else renderStageMasonry();
+}
+
+function finishRenderStage(){
+  /* keyboard focus: restore if the item survived, or land on first card after kb navigation */
+  if(S.kbNav){ S.kbNav=false; setFocus(S.displayOrder[0]?.id||null, false); }
+  else if(S.focusId && S.displayOrder.some(f=>f.id===S.focusId)) setFocus(S.focusId, false);
+  else S.focusId=null;
+  updateSelectBar();
+}
+
+function renderStageFlat(){
+  const stage=$('#stage');
   const folders = sorted(S.items.filter(f=>f.mimeType===FOLDER_MIME));
   const files   = sorted(S.items.filter(f=>f.mimeType!==FOLDER_MIME));
   S.displayOrder = [...folders, ...files];
@@ -1231,11 +1293,56 @@ function renderStage(animate=true){
     frag.appendChild(empty);
   }
   stage.replaceChildren(frag);
-  /* keyboard focus: restore if the item survived, or land on first card after kb navigation */
-  if(S.kbNav){ S.kbNav=false; setFocus(S.displayOrder[0]?.id||null, false); }
-  else if(S.focusId && S.displayOrder.some(f=>f.id===S.focusId)) setFocus(S.focusId, false);
-  else S.focusId=null;
-  updateSelectBar();
+  finishRenderStage();
+}
+
+/* Bento/masonry browsing view: folders and files interleaved in the current
+   sort order (not bucketed into separate "Folders"/"Files" sections) — a
+   folder shows as either a manifest tile (icon, name, recent filenames) or,
+   if it's mostly photos/videos, an album-cover tile (cover photo + counts);
+   single image/video files get a big media tile; everything else (pdf, doc,
+   zip, txt…) gets a small compact row, and consecutive small files are
+   bundled a few at a time into one stacked cluster tile instead of each
+   getting its own separate cell. */
+function isMediaKind(f){ const k=kind(f); return k==='image'||k==='video'; }
+
+function renderStageMasonry(){
+  const stage=$('#stage');
+  const items = sorted(S.items);
+  S.displayOrder = items;
+  let i=0, num=0;
+
+  const frag=document.createDocumentFragment();
+  const g=document.createElement('div'); g.className='masonry';
+
+  let pendingCluster=[];
+  const flushCluster=()=>{
+    if(!pendingCluster.length) return;
+    g.appendChild(docClusterTile(pendingCluster));
+    pendingCluster=[];
+  };
+  for(const f of items){
+    if(f.mimeType===FOLDER_MIME){
+      flushCluster();
+      g.appendChild(folderTile(f, i++, ++num));
+    } else if(isMediaKind(f)){
+      flushCluster();
+      g.appendChild(mediaTile(f, i++, ++num));
+    } else {
+      pendingCluster.push({f, i:i++, num:++num});
+      if(pendingCluster.length>=3) flushCluster();
+    }
+  }
+  flushCluster();
+  frag.appendChild(g);
+
+  if(!items.length){
+    const empty=document.createElement('div'); empty.className='empty';
+    empty.innerHTML=`<div class="big">Nothing here yet</div><p>Drop files anywhere to upload</p>`;
+    frag.appendChild(empty);
+  }
+  stage.replaceChildren(frag);
+  finishRenderStage();
 }
 
 function folderCard(f, i, num){
@@ -1260,7 +1367,7 @@ function folderCard(f, i, num){
     </div>
     <button class="more">⋯</button>`;
   wireCard(el, f, ()=> openFolder(f));
-  if(!m) hydrateFolderMeta(f.id, el);
+  if(!m) hydrateFolderMeta(f, el);
   return el;
 }
 
@@ -1293,6 +1400,158 @@ function fileCard(f, i, num){
   else if(f._local && IS_ELECTRON) observeNativeIcon(el, f);
   return el;
 }
+
+/* ============ MASONRY TILES ============ */
+/* shared cover-image markup for both a folder's album-cover tile and a
+   single media file's tile — same source-resolution rules fileCard() already
+   uses (local image → lazy file:// src, thumbnailLink → Drive's thumbnail,
+   local video → a muted <video> that shows its first frame, otherwise a
+   plain type glyph). */
+function coverMarkup(f){
+  const k=kind(f);
+  const localImg = f._local && k==='image' && (f.size||0) < 25*1024*1024;
+  const localVideo = f._local && k==='video';
+  if(localImg) return `<img class="cover" data-lazy-img loading="lazy">`;
+  if(f.thumbnailLink && (k==='image'||k==='video')) return `<img class="cover" loading="lazy" src="${esc(f.thumbnailLink.replace(/=s\d+/,'=s640'))}" onerror="this.remove()">`;
+  if(localVideo) return `<video class="cover" data-lazy-video muted playsinline preload="none"></video>`;
+  return `<span class="typeglyph cover-glyph">${GLYPH[k]||'FILE'}</span>`;
+}
+let coverObserver=null;
+function ensureCoverObserver(){
+  if(coverObserver) return coverObserver;
+  coverObserver = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      if(!entry.isIntersecting) return;
+      coverObserver.unobserve(entry.target);
+      /* a folder's album cover is a CHILD file's id (data-cover-id), never
+         the folder's own id (data-id, needed intact for wireCard/openFolder) */
+      const srcId = entry.target.dataset.coverId || entry.target.dataset.id;
+      const img = entry.target.querySelector('img[data-lazy-img]');
+      if(img){ img.onload=()=>img.classList.add('loaded'); img.onerror=()=>img.remove(); img.src=toFileUrl(srcId); }
+      const vid = entry.target.querySelector('video[data-lazy-video]');
+      if(vid){ vid.onloadeddata=()=>vid.classList.add('loaded'); vid.onerror=()=>vid.remove(); vid.preload='metadata'; vid.src=toFileUrl(srcId); }
+    });
+  }, {rootMargin:'200px'});
+  return coverObserver;
+}
+/* single media FILE tile — cover source is the file's own id */
+function observeCover(el, f){ ensureCoverObserver().observe(el); }
+/* folder ALBUM tile — cover source is a child file's id, stashed separately
+   so it never collides with the folder's own data-id */
+function observeFolderCover(el, coverId){
+  el.dataset.coverId = coverId;
+  ensureCoverObserver().observe(el);
+}
+
+function pickCover(kids){
+  const media = kids.filter(x=>isMediaKind(x));
+  if(!media.length) return null;
+  const byNewest = [...media].sort((a,b)=> new Date(b.modifiedTime)-new Date(a.modifiedTime));
+  return byNewest.find(x=>kind(x)==='image') || byNewest[0];
+}
+
+function manifestBody(f, m, linked){
+  const names = m?.recentNames || [];
+  const moreCount = m ? Math.max(0, m.count-names.length) : 0;
+  return `
+    <svg class="foldericon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6z"/></svg>
+    <div class="title"><span class="ttx">${esc(f.name)}</span></div>
+    <div class="meta">
+      <span class="m-count">${m? m.count+' ITEMS':'…'}</span>
+      ${linked?'<span class="sep">·</span><span class="badge">LINKED</span>':''}
+    </div>
+    <div class="flist">
+      ${names.map(n=>`<div class="frow">${esc(n)}</div>`).join('')}
+      ${moreCount>0?`<div class="fmore">+${moreCount} more</div>`:''}
+    </div>`;
+}
+function albumBody(f, m){
+  const caption=[m.photoCount?`${m.photoCount} photo${m.photoCount===1?'':'s'}`:null, m.videoCount?`${m.videoCount} video${m.videoCount===1?'':'s'}`:null].filter(Boolean).join(' · ');
+  return `
+    ${coverMarkup(m.cover)}
+    <div class="caption"><div class="title"><span class="ttx">${esc(f.name)}</span></div><div class="meta">${esc(caption)}</div></div>`;
+}
+function folderChrome(f, num, linked){
+  return `${num&&num<=9?`<div class="idx">${num}</div>`:''}
+    <button class="fav${isFavourited(f.id)?' active':''}">${ICON_STAR}</button>
+    <div class="check">✓</div>
+    <button class="more">⋯</button>`;
+}
+function folderTile(f, i, num){
+  const linked = zone()?.linked?.includes(f.id);
+  const el=document.createElement('div');
+  el.className='card mtile folder manifest'+(isFavourited(f.id)?' favourited':'');
+  el.style.setProperty('--i', Math.min(i,10));
+  el.dataset.id=f.id;
+  const m=S.meta[f.id];
+  el.innerHTML = folderChrome(f, num, linked) + manifestBody(f, m, linked);
+  wireCard(el, f, ()=> openFolder(f));
+  if(m && m.peeked) applyFolderPeek(el, f, m);
+  else hydrateFolderMeta(f, el);
+  return el;
+}
+/* once a folder's contents are known (via hydrateFolderMeta below), decide
+   manifest vs. album-cover and rebuild the tile's inner content — re-wiring
+   is required since innerHTML replacement creates fresh DOM nodes for the
+   buttons wireCard() attached handlers to. */
+function applyFolderPeek(el, f, m){
+  const linked = zone()?.linked?.includes(f.id);
+  const num = el.querySelector('.idx')?.textContent || '';
+  const isAlbum = m.cover && m.count>0 && (m.photoCount+m.videoCount) > m.count/2;
+  el.classList.toggle('manifest', !isAlbum);
+  el.classList.toggle('album', isAlbum);
+  el.innerHTML = folderChrome(f, num, linked) + (isAlbum ? albumBody(f, m) : manifestBody(f, m, linked));
+  wireCard(el, f, ()=> openFolder(f));
+  if(isAlbum) observeFolderCover(el, m.cover.id);
+}
+
+function mediaTile(f, i, num){
+  const k=kind(f);
+  const el=document.createElement('div');
+  el.className='card mtile file media'+(isFavourited(f.id)?' favourited':'');
+  el.style.setProperty('--i', Math.min(i,12));
+  if(KIND_TINT[k]) el.style.setProperty('--tint', KIND_TINT[k]);
+  el.dataset.id=f.id;
+  el.innerHTML = `
+    ${num&&num<=9?`<div class="idx">${num}</div>`:''}
+    <button class="fav${isFavourited(f.id)?' active':''}">${ICON_STAR}</button>
+    <div class="check">✓</div>
+    <button class="more">⋯</button>
+    ${coverMarkup(f)}
+    <div class="caption"><div class="title"><span class="ttx">${esc(displayName(f))}</span></div>
+      <div class="meta">${f.size?fmtSize(f.size)+' · ':''}${timeAgo(f.modifiedTime).toUpperCase()}</div></div>`;
+  wireCard(el, f, ()=> openItem(f));
+  observeCover(el, f);
+  return el;
+}
+
+function docClusterTile(entries){
+  const wrap=document.createElement('div');
+  wrap.className='mtile doc-cluster';
+  wrap.style.setProperty('--rows', entries.length);
+  entries.forEach(({f,i,num})=>{
+    const k=kind(f);
+    const row=document.createElement('div');
+    row.className='card docrow'+(isFavourited(f.id)?' favourited':'');
+    row.style.setProperty('--i', Math.min(i,12));
+    if(KIND_TINT[k]) row.style.setProperty('--tint', KIND_TINT[k]);
+    row.dataset.id=f.id;
+    row.innerHTML = `
+      ${num&&num<=9?`<div class="idx">${num}</div>`:''}
+      <button class="fav${isFavourited(f.id)?' active':''}">${ICON_STAR}</button>
+      <div class="check">✓</div>
+      <button class="more">⋯</button>
+      <span class="typeglyph"${f._local?' data-native-icon':''}>${GLYPH[k]||'FILE'}</span>
+      <div class="title"><span class="ttx">${esc(displayName(f))}</span></div>
+      <div class="meta">${f.size?fmtSize(f.size)+' · ':''}${timeAgo(f.modifiedTime).toUpperCase()}</div>
+      <span class="chev">›</span>`;
+    wireCard(row, f, ()=> openItem(f));
+    if(f._local && IS_ELECTRON) observeNativeIcon(row, f);
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+
 let iconObserver;
 function observeNativeIcon(el, f){
   if(!iconObserver){
@@ -1385,27 +1644,43 @@ function wireCard(el, f, openFn){
 
 
 const metaQueue=[]; const metaPending=new Set(); let metaActive=0;
-function hydrateFolderMeta(folderId, el){
-  if(S.meta[folderId] || metaPending.has(folderId)) return;
-  metaPending.add(folderId); metaQueue.push({folderId, el}); pumpMeta();
+function hydrateFolderMeta(f, el){
+  const folderId=f.id;
+  /* .peeked distinguishes the richer masonry data (recent names/cover) from
+     older cached {count,size}-only entries (persisted before this existed) —
+     an old entry must still trigger a fresh hydrate, not be treated as done */
+  if(S.meta[folderId]?.peeked || metaPending.has(folderId)) return;
+  metaPending.add(folderId); metaQueue.push({f, el}); pumpMeta();
 }
 async function pumpMeta(){
   if(metaActive>=3 || !metaQueue.length) return; /* max 3 parallel — keeps Drive happy */
   const job=metaQueue.shift(); metaActive++;
-  try{ await hydrateOne(job.folderId, job.el); }catch(e){}
-  metaPending.delete(job.folderId); metaActive--; pumpMeta();
+  try{ await hydrateOne(job.f, job.el); }catch(e){}
+  metaPending.delete(job.f.id); metaActive--; pumpMeta();
 }
-async function hydrateOne(folderId, el){
+async function hydrateOne(f, el){
+  const folderId=f.id;
   try{
     const kids = await listChildren(folderId);
-    const size = kids.reduce((a,f)=>a+(+f.size||0),0);
-    S.meta[folderId]={count:kids.length,size}; persistCache();
+    const size = kids.reduce((a,x)=>a+(+x.size||0),0);
+    const media = kids.filter(x=>isMediaKind(x));
+    const photoCount = media.filter(x=>kind(x)==='image').length;
+    const videoCount = media.filter(x=>kind(x)==='video').length;
+    const recentNames = [...kids].sort((a,b)=> new Date(b.modifiedTime)-new Date(a.modifiedTime)).slice(0,5).map(x=>x.name);
+    const m = {count:kids.length, size, photoCount, videoCount, cover:pickCover(kids), recentNames, peeked:true};
+    S.meta[folderId]=m; persistCache();
     S.cache[folderId]={files:kids, ts:Date.now()};
-    const mc=el?.querySelector('.m-count'); if(mc) mc.textContent = kids.length+' ITEMS';
-    if(size && el && !el.querySelector('.meta .sz')){
-      const span=document.createElement('span'); span.className='sz'; span.textContent=fmtSize(size);
-      const sep=document.createElement('span'); sep.className='sep'; sep.textContent='·';
-      mc.after(sep, span);
+    if(!el || !el.isConnected) return;
+    if(el.classList.contains('mtile')){
+      applyFolderPeek(el, f, m);
+    } else {
+      /* flat grid (Recent) — same lightweight patch as before, no masonry re-render */
+      const mc=el.querySelector('.m-count'); if(mc) mc.textContent = kids.length+' ITEMS';
+      if(size && !el.querySelector('.meta .sz')){
+        const span=document.createElement('span'); span.className='sz'; span.textContent=fmtSize(size);
+        const sep=document.createElement('span'); sep.className='sep'; sep.textContent='·';
+        mc.after(sep, span);
+      }
     }
   }catch(e){}
 }
