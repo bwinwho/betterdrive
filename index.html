@@ -286,8 +286,11 @@ input{font-family:inherit;color:inherit}
 /* image files: the photo fills the entire card (edge-to-edge, no inset,
    no fade-to-background) instead of a small thumbnail — icons and the
    filename/meta caption sit on their own scrims so they stay readable
-   over whatever's underneath. */
-.card.file.image-cover{padding:0}
+   over whatever's underneath. Explicit min-height is REQUIRED: everything
+   inside an image-cover card is absolutely positioned (cover + caption),
+   so the card has no intrinsic flow height — without this it would
+   collapse to a thin line in any row not shared with a normal card. */
+.card.file.image-cover{padding:0;min-height:200px}
 .card.file.image-cover .lthumb-wrap{position:absolute;inset:0;width:100%;height:100%;margin:0;border-radius:4px}
 .card.file.image-cover .lthumb-wrap::after{
   background:linear-gradient(to top, rgba(6,6,5,.9) 0%, rgba(6,6,5,.35) 32%, transparent 60%),
@@ -404,6 +407,27 @@ body.kbrowse .znum{opacity:.18}
 }
 #selectbar button:hover{color:var(--cream);background:rgba(234,228,214,.07)}
 #selectbar button.danger:hover{color:var(--danger);background:rgba(201,111,94,.1)}
+
+/* clipboard bar — replaces the selection bar once Cut/Copy is chosen, so the
+   user can navigate freely (folders open normally, selection is cleared) and
+   drop the files wherever they land. Same position/look as the selection bar;
+   the two are mutually exclusive. */
+#clipbar{
+  position:fixed;bottom:calc(var(--zonebar-h) + 34px);left:50%;transform:translateX(-50%) translateY(20px);
+  z-index:49;display:flex;align-items:center;gap:6px;opacity:0;pointer-events:none;
+  background:rgba(20,20,18,.9);border:1px solid rgba(232,199,102,.35);border-radius:5px;padding:7px 9px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 18px 50px rgba(0,0,0,.5);
+  transition:all .35s var(--ease);
+}
+#clipbar.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+#clipbar .count{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;color:var(--cream);padding:0 12px}
+#clipbar button{
+  font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);
+  padding:10px 14px;border-radius:3px;transition:all .25s var(--ease);
+}
+#clipbar button:hover{color:var(--cream);background:rgba(234,228,214,.07)}
+#clipbar button.solid{color:#0c0c0a;background:rgba(232,199,102,.9);font-weight:500}
+#clipbar button.solid:hover{background:#e8c766}
 
 /* ============ MODAL ============ */
 #modal-scrim{position:fixed;inset:0;z-index:80;background:rgba(5,5,4,.66);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
@@ -654,8 +678,16 @@ body.electron .wordmark{display:none}
     <button id="sel-copy">Copy</button>
     <button id="sel-cut">Cut</button>
     <button id="sel-move">Move</button>
+    <button id="sel-fav">★ Favourite</button>
+    <button id="sel-zip">Zip</button>
     <button id="sel-trash" class="danger">Trash</button>
     <button id="sel-clear">✕</button>
+  </div>
+
+  <div id="clipbar">
+    <span class="count" id="clip-count">0 READY</span>
+    <button id="clip-paste" class="solid">Paste here</button>
+    <button id="clip-cancel">Cancel</button>
   </div>
 </div>
 
@@ -1259,7 +1291,7 @@ function renderStage(animate=true){
 function folderCard(f, i, num){
   const linked = zone()?.linked?.includes(f.id);
   const el=document.createElement('div');
-  el.className='card folder'+(isFavourited(f.id)?' favourited':''); el.style.setProperty('--i', Math.min(i,10));
+  el.className='card folder'+(isFavourited(f.id)?' favourited':'')+(S.selection.has(f.id)?' selected':''); el.style.setProperty('--i', Math.min(i,10));
   el.dataset.id=f.id;
   const m=S.meta[f.id];
   el.innerHTML = `
@@ -1291,7 +1323,7 @@ function fileCard(f, i, num){
      thumbnail — title/meta/icons sit on a scrim over the photo so they stay
      legible regardless of what's underneath */
   const imageCover = localImg || driveImg;
-  el.className='card file'+(imageCover?' image-cover':'')+(isFavourited(f.id)?' favourited':'');
+  el.className='card file'+(imageCover?' image-cover':'')+(isFavourited(f.id)?' favourited':'')+(S.selection.has(f.id)?' selected':'');
   el.style.setProperty('--i', Math.min(i,12));
   el.dataset.id=f.id;
   if(KIND_TINT[k]) el.style.setProperty('--tint', KIND_TINT[k]);
@@ -1615,22 +1647,37 @@ function clearSelection(){
   $$('.card.selected').forEach(c=>c.classList.remove('selected'));
   updateSelectBar();
 }
+/* one function owns BOTH bottom bars, which are mutually exclusive: while items
+   are selected show the selection bar; once nothing is selected but a Cut/Copy
+   is pending, show the clipboard bar (Paste here / Cancel) so the user can
+   navigate freely and drop the files wherever they land. */
 function updateSelectBar(){
   const n=S.selection.size;
-  $('#selectbar').classList.toggle('show', n>0);
   $('#sel-count').textContent = n+' SELECTED';
+  $('#selectbar').classList.toggle('show', n>0);
+  const clip = S.clipboard && S.clipboard.items.length;
+  const showClip = n===0 && !!clip;
+  $('#clipbar').classList.toggle('show', showClip);
+  if(showClip) $('#clip-count').textContent = S.clipboard.items.length+(S.clipboard.mode==='cut'?' TO MOVE':' TO COPY');
 }
 function selectedItems(){ return S.items.filter(f=>S.selection.has(f.id)); }
 
+/* Cut/Copy captures the current selection into the clipboard, then CLEARS the
+   selection — this is what lets the user open folders normally again (with a
+   selection active, a card click selects instead of navigating). The clipboard
+   bar appears in its place with a Paste action. */
 function clipboardCopy(items, mode){
-  S.clipboard = {mode, items};
-  toast((mode==='cut'?'Ready to move: ':'Ready to copy: ')+items.length+' item'+(items.length>1?'s':'')+' — Ctrl+V to paste');
+  if(!items || !items.length) return;
+  S.clipboard = {mode, items: items.slice(), sourceDir: currentFolderId()};
+  clearSelection(); // exits select-mode + reveals the clipboard bar via updateSelectBar
+  toast((mode==='cut'?'Cut ':'Copied ')+items.length+' item'+(items.length>1?'s':'')+' — open a folder, then Paste');
 }
+function cancelClipboard(){ S.clipboard=null; updateSelectBar(); }
 async function pasteFlow(){
   if(!S.clipboard || !S.clipboard.items.length) return toast('Clipboard is empty',true);
   const destDir = currentFolderId();
   if(!isLocalId(destDir)) return toast('Paste only works inside local worlds right now',true);
-  const {mode, items} = S.clipboard;
+  const {mode, items, sourceDir} = S.clipboard;
   toast((mode==='cut'?'Moving ':'Copying ')+items.length+' item'+(items.length>1?'s':'')+'…');
   let ok=0, fail=0;
   for(const it of items){
@@ -1640,9 +1687,51 @@ async function pasteFlow(){
       ok++;
     }catch(e){ fail++; }
   }
-  if(mode==='cut') S.clipboard=null; /* cut is one-shot; copy can be pasted repeatedly */
+  /* a completed paste ends the operation (bar goes away) — re-Copy for another.
+     Invalidate BOTH the destination AND, for a cut, the source folder — otherwise
+     revisiting the source would show ghost cards of files that moved away. */
+  S.clipboard=null;
+  delete S.cache[destDir]; delete S.meta[destDir];
+  if(mode==='cut' && sourceDir && sourceDir!==destDir){ delete S.cache[sourceDir]; delete S.meta[sourceDir]; }
+  updateSelectBar();
   toast(ok+' pasted'+(fail?', '+fail+' failed':''));
-  delete S.cache[destDir]; await loadCurrent({refresh:true});
+  await loadCurrent({refresh:true});
+}
+function favouriteSelected(){
+  const items=selectedItems();
+  let added=0;
+  items.forEach(f=>{
+    if(!isFavourited(f.id)){
+      S.favourites.push({...f}); added++;
+      if(f._local && f.mimeType!==FOLDER_MIME && S.cloudConnected) syncFavouriteToCloud(f);
+    }
+  });
+  persistFavourites();
+  toast(added? ('Added '+added+' to Favourites') : 'Already in Favourites');
+  clearSelection();
+  if(zone()?.type==='favourites'){ delete S.cache[FAVOURITES_ID]; loadCurrent({refresh:true}); }
+  else renderStage(false); // repaint the gold favourite state on the affected cards
+}
+async function zipSelected(){
+  const local=selectedItems().filter(f=>f._local);
+  if(!local.length) return toast('Zip only works on local files right now',true);
+  const paths=local.map(f=>f.id); const destDir=currentFolderId();
+  const row=document.createElement('div'); row.className='up-item';
+  row.innerHTML=`<div class="nm">Zipping ${local.length} item${local.length>1?'s':''}</div><div class="bar indeterminate"><i></i></div><div class="st">COMPRESSING…</div>`;
+  $('#uploads').appendChild(row);
+  clearSelection();
+  try{
+    await window.localFS.zip(paths, destDir);
+    row.querySelector('.bar').classList.remove('indeterminate');
+    row.querySelector('.bar i').style.width='100%';
+    row.querySelector('.st').textContent='DONE ✓';
+    setTimeout(()=>{ row.style.transition='opacity .5s'; row.style.opacity='0'; setTimeout(()=>row.remove(),520); },900);
+    delete S.cache[destDir]; await loadCurrent({refresh:true});
+  }catch(e){
+    row.querySelector('.bar').classList.remove('indeterminate');
+    row.querySelector('.st').textContent='FAILED';
+    toast(e.message||'Zip failed',true);
+  }
 }
 
 /* ================= MENUS / MODALS ================= */
@@ -2093,6 +2182,10 @@ $('#sel-trash').onclick=()=> trashFlow(selectedItems());
 $('#sel-move').onclick=()=> moveFlow(selectedItems());
 $('#sel-copy').onclick=()=> clipboardCopy(selectedItems(),'copy');
 $('#sel-cut').onclick=()=> clipboardCopy(selectedItems(),'cut');
+$('#sel-fav').onclick=()=> favouriteSelected();
+$('#sel-zip').onclick=()=> zipSelected();
+$('#clip-paste').onclick=()=> pasteFlow();
+$('#clip-cancel').onclick=()=> cancelClipboard();
 
 /* ================= KEYS ================= */
 function isTyping(){ const t=document.activeElement?.tagName; return t==='INPUT'||t==='TEXTAREA'; }

@@ -185,6 +185,27 @@ ipcMain.handle('fs:extractZip', (e, zipPath) => new Promise((resolve, reject) =>
   });
 }));
 
+/* Compress one or more paths (files and/or folders) into a single .zip placed
+   next to them, via PowerShell's Compress-Archive — the mirror of extractZip
+   above, no compiled dependency. Names the archive after the first item (or
+   "Archive"), de-duping if that name already exists. */
+ipcMain.handle('fs:zip', (e, paths, destDir) => new Promise((resolve, reject) => {
+  if (process.platform !== 'win32') return reject(new Error('Zipping is only available on Windows'));
+  if (!Array.isArray(paths) || !paths.length) return reject(new Error('Nothing to zip'));
+  const dir = destDir || path.dirname(paths[0]);
+  const firstBase = path.basename(paths[0], path.extname(paths[0]));
+  const stem = paths.length === 1 ? firstBase : (firstBase + ' +' + (paths.length - 1));
+  let dest = path.join(dir, `${stem}.zip`);
+  let n = 2;
+  while (fs.existsSync(dest)) { dest = path.join(dir, `${stem} (${n}).zip`); n++; }
+  const list = paths.map(p => `'${p.replace(/'/g, "''")}'`).join(',');
+  const psScript = `Compress-Archive -LiteralPath ${list} -DestinationPath '${dest.replace(/'/g, "''")}' -Force`;
+  execFile('powershell', ['-NoProfile', '-Command', psScript], { timeout: 120000 }, (err, stdout, stderr) => {
+    if (err) return reject(new Error(stderr || err.message));
+    resolve(dest);
+  });
+}));
+
 /* ---------- Windows' own "Recent" list — the .lnk shortcuts Explorer/Office/etc.
    already drop into %AppData%/Microsoft/Windows/Recent every time any app opens a
    file. Resolving them via the WScript.Shell COM object (through PowerShell) needs
