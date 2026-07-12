@@ -13,6 +13,7 @@ const esc = (s) => (s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 let pdfjsLib = null;
 let ViewerMod = null;
 let cssInjected = false;
+let workersUsablePromise = null; // cached per app session — this is a property of the environment, not of any one PDF
 
 async function loadLibs() {
   if (!pdfjsLib) {
@@ -20,14 +21,11 @@ async function loadLibs() {
     /* Worker loading is the single most fragile part of embedding pdf.js in
        Electron — it has to work across file://, our custom app:// scheme, and
        inside/outside asar, and a URL that's fine for a normal `<script>` fetch
-       can still silently fail to instantiate as a Worker (which is what left
-       the viewer hanging blank). The bulletproof approach: fetch the worker's
-       bytes ourselves and hand pdf.js a blob: URL. Blob URLs are same-origin
-       with this document and are universally instantiable as module workers no
-       matter what scheme the page itself was served from, sidestepping every
-       one of those environment quirks. The worker file is self-contained (its
-       only dynamic import is an optional JPEG2000 decoder, never hit by normal
-       PDFs), so a blob module worker runs it perfectly. */
+       can still silently fail to instantiate as a Worker. Hand it a blob: URL
+       (same-origin with this document, universally instantiable as a module
+       worker regardless of the page's own scheme) rather than a scheme-based
+       one — this removes URL/scheme mismatches as a variable even though it
+       turned out not to be the whole story (see testWorkerAlive below). */
     const workerUrl = new URL('../../vendor/pdfjs/build/pdf.worker.min.mjs', import.meta.url).href;
     try {
       const workerCode = await (await fetch(workerUrl)).text();
@@ -47,6 +45,46 @@ async function loadLibs() {
     link.href = new URL('../../vendor/pdfjs/web/pdf_viewer.css', import.meta.url).href;
     document.head.appendChild(link);
     document.head.appendChild(makeChromeStyle());
+  }
+}
+
+/* Even a same-origin blob: module worker can, in some Electron/Windows builds,
+   start executing without ever completing its handshake back to the main
+   thread — no error event fires (so pdf.js's own error-triggered fallback
+   never kicks in), it just hangs forever. A trivial, totally independent
+   worker (nothing to do with pdf.js) tells us in ~3s whether module workers
+   function AT ALL in this environment, once per app session. */
+function testWorkerAlive() {
+  if (workersUsablePromise) return workersUsablePromise;
+  workersUsablePromise = new Promise((resolve) => {
+    try {
+      const blob = new Blob(['postMessage("bd-worker-alive")'], { type: 'text/javascript' });
+      const url = URL.createObjectURL(blob);
+      const w = new Worker(url, { type: 'module' });
+      const done = (ok) => { clearTimeout(timer); try { w.terminate(); } catch (e) {} URL.revokeObjectURL(url); resolve(ok); };
+      const timer = setTimeout(() => done(false), 3000);
+      w.onmessage = () => done(true);
+      w.onerror = () => done(false);
+    } catch (e) { resolve(false); }
+  });
+  return workersUsablePromise;
+}
+
+/* If workers don't function here, force pdf.js's OWN built-in main-thread
+   fallback (it already has one — it's what runs pdf.js in Node/testing
+   environments) rather than reimplementing any of its internals ourselves.
+   pdf.js only takes that path if constructing the real Worker throws
+   synchronously, so we make it throw by swapping the global Worker
+   constructor out for the duration of this one call, then restoring it. */
+async function makeLoadingTask(bytes) {
+  const usable = await testWorkerAlive();
+  if (usable) return pdfjsLib.getDocument({ data: bytes });
+  const RealWorker = window.Worker;
+  window.Worker = function () { throw new Error('workers disabled — forcing pdf.js main-thread fallback'); };
+  try {
+    return pdfjsLib.getDocument({ data: bytes }); // constructs its PDFWorker synchronously, so the patched Worker is what it sees
+  } finally {
+    window.Worker = RealWorker;
   }
 }
 
@@ -190,7 +228,7 @@ export default {
       saveTimer: null,
     };
 
-    const loadingTask = pdfjsLib.getDocument({ data: bytes });
+    const loadingTask = await makeLoadingTask(bytes);
     handle.loadingTask = loadingTask;
     /* never hang blank: if the document (i.e. the worker) hasn't come back in
        25s, show an error instead of sitting on an empty canvas forever. We
