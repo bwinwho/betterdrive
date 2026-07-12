@@ -387,82 +387,6 @@ body.kbrowse .znum{opacity:.18}
 #selectbar button:hover{color:var(--cream);background:rgba(234,228,214,.07)}
 #selectbar button.danger:hover{color:var(--danger);background:rgba(201,111,94,.1)}
 
-/* ============ PREVIEW PANEL ============ */
-#scrim{position:fixed;inset:0;background:rgba(5,5,4,.6);backdrop-filter:blur(3px);z-index:70;opacity:0;pointer-events:none;transition:opacity .4s var(--ease)}
-#scrim.show{opacity:1;pointer-events:auto}
-#preview{
-  position:fixed;top:0;right:0;bottom:0;width:min(520px,94vw);z-index:71;
-  background:#121210;border-left:1px solid var(--faint-2);
-  transform:translateY(102%);transition:transform .45s var(--ease);
-  display:flex;flex-direction:column;box-shadow:0 -30px 80px rgba(0,0,0,.5);
-}
-#preview.show{transform:translateY(0)}
-body.electron #preview{top:38px}
-/* fullscreen mode: image/video/audio/text/pdf take over the whole window
-   instead of the narrow side panel, matching a proper viewer/player/editor
-   rather than a metadata drawer */
-#preview.pv-fullscreen{width:100vw;left:0;border-left:none}
-#preview.pv-fullscreen .pv-head{padding:18px 28px 0}
-#preview.pv-fullscreen .pv-head .ttl{
-  font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
-  font-weight:500;text-shadow:none;color:var(--dim);
-}
-#preview.pv-fullscreen .pv-meta{opacity:.55;padding:8px 28px 0}
-#preview.pv-fullscreen .pv-body{margin:16px 28px;border:none;background:transparent}
-#preview.pv-fullscreen .pv-actions{opacity:.5;transition:opacity .25s var(--ease)}
-#preview.pv-fullscreen .pv-actions:hover{opacity:1}
-#preview.pv-fullscreen .player .disc{width:200px;height:200px}
-.pv-nav{
-  position:absolute;top:50%;transform:translateY(-50%);width:48px;height:48px;border-radius:50%;
-  background:rgba(10,10,9,.55);border:1px solid var(--faint-2);display:flex;align-items:center;justify-content:center;
-  color:var(--dim);opacity:.4;transition:all .25s var(--ease);z-index:5;
-}
-.pv-nav:hover{opacity:1;color:var(--cream);background:rgba(10,10,9,.8)}
-.pv-nav.prev{left:16px}
-.pv-nav.next{right:16px}
-.pv-counter{
-  position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
-  font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--dim);opacity:.6;z-index:5;
-}
-.pv-head{display:flex;align-items:flex-start;gap:14px;padding:26px 28px 0}
-.pv-head .ttl{font-family:var(--serif);font-size:clamp(24px,3vw,32px);font-weight:600;line-height:1.05;word-break:break-word;flex:1;text-shadow:0 0 24px rgba(246,242,230,.15)}
-.pv-close{font-family:var(--mono);font-size:11px;color:var(--dim);padding:8px 12px;border:1px solid var(--faint);border-radius:2px;transition:all .3s var(--ease)}
-.pv-close:hover{color:var(--cream);border-color:var(--faint-2)}
-.pv-meta{padding:14px 28px 0;font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);display:flex;flex-wrap:wrap;gap:6px 14px}
-.pv-body{flex:1;margin:22px 28px;border:1px solid var(--faint);border-radius:4px;overflow:hidden;background:#0c0c0b;display:flex;align-items:center;justify-content:center;position:relative;min-height:0}
-.pv-body img{max-width:100%;max-height:100%;object-fit:contain;animation:fadeIn .5s both}
-.pv-body iframe{width:100%;height:100%;border:none;background:#0c0c0b}
-.editor-wrap{width:100%;height:100%;display:flex;flex-direction:column}
-#pv-editor{
-  flex:1;width:100%;background:#0c0c0b;color:var(--cream);border:none;resize:none;
-  font-family:var(--mono);font-size:12.5px;line-height:1.6;padding:18px;tab-size:2;
-}
-.editor-status{
-  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
-  padding:8px 18px;border-top:1px solid var(--faint);background:#101010;
-}
-.editor-status.dirty{color:var(--cream)}
-.pv-body .loading{font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:var(--dim);text-transform:uppercase;animation:pulseGlow 2s infinite}
-.pv-actions{display:flex;gap:8px;padding:0 28px 28px;flex-wrap:wrap}
-.pv-actions .iconbtn{flex:1 1 calc(50% - 4px);text-align:center;min-width:100px;white-space:normal;line-height:1.4}
-
-/* audio player */
-.player{width:100%;padding:38px 30px;display:flex;flex-direction:column;gap:26px;align-items:center}
-.player .disc{
-  width:120px;height:120px;border-radius:50%;border:1px solid var(--faint-2);
-  background:radial-gradient(circle at 50% 50%,#1d1d1a 28%,#121210 30%,#171715 60%);
-  display:flex;align-items:center;justify-content:center;position:relative;
-}
-.player .disc::after{content:'';position:absolute;inset:42%;border-radius:50%;background:var(--cream);opacity:.85}
-.player.playing .disc{animation:spin 9s linear infinite;box-shadow:0 0 50px rgba(246,242,230,.1)}
-@keyframes spin{to{transform:rotate(360deg)}}
-.player .pcontrols{display:flex;align-items:center;gap:26px}
-.player .pbtn{font-family:var(--mono);font-size:11px;letter-spacing:.25em;color:var(--cream);padding:14px 26px;border:1px solid var(--faint-2);border-radius:3px;transition:all .3s var(--ease)}
-.player .pbtn:hover{box-shadow:0 0 26px rgba(246,242,230,.12);border-color:rgba(234,228,214,.4)}
-.player .seek{width:100%;display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:10px;color:var(--dim)}
-.player input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:2px;background:var(--faint-2);border-radius:2px;cursor:pointer}
-.player input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--cream);box-shadow:0 0 14px rgba(246,242,230,.4)}
-
 /* ============ MODAL ============ */
 #modal-scrim{position:fixed;inset:0;z-index:80;background:rgba(5,5,4,.66);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
 #modal-scrim.show{opacity:1;pointer-events:auto}
@@ -547,11 +471,6 @@ body.electron #preview{top:38px}
 .help-grid span{font-size:13px;color:rgba(234,228,214,.75);align-self:center}
 
 
-.pv-path{
-  width:100%;font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.04em;cursor:pointer;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px;transition:color .2s var(--ease);
-}
-.pv-path:hover{color:var(--cream)}
 .crumb-seg{cursor:pointer;transition:color .2s var(--ease)}
 .crumb-seg:hover{color:var(--cream)}
 
@@ -620,7 +539,6 @@ body.electron .wordmark{display:none}
   .searchwrap{order:3;max-width:100%;flex-basis:100%}
   .card{padding:24px 22px}
   .card.folder .title{font-size:22px}
-  #preview{width:100vw}
 }
 </style>
 </head>
@@ -722,18 +640,6 @@ body.electron .wordmark{display:none}
     <button id="sel-clear">✕</button>
   </div>
 </div>
-
-<!-- preview -->
-<div id="scrim"></div>
-<aside id="preview">
-  <div class="pv-head">
-    <div class="ttl" id="pv-title"></div>
-    <button class="pv-close" id="pv-close">ESC</button>
-  </div>
-  <div class="pv-meta" id="pv-meta"></div>
-  <div class="pv-body" id="pv-body"></div>
-  <div class="pv-actions" id="pv-actions"></div>
-</aside>
 
 <!-- modal -->
 <div id="modal-scrim"><div id="modal"></div></div>
@@ -1092,18 +998,6 @@ async function fetchBlob(id, onProgress, attempt=0){
   while(true){ const {done,value}=await reader.read(); if(done) break; chunks.push(value); got+=value.length; if(total) onProgress(got/total); }
   return new Blob(chunks);
 }
-/* Google Docs/Sheets/Slides have no raw downloadable bytes — they only support
-   exporting to a real format, via our own OAuth token (no separate browser
-   sign-in needed, unlike Google's hosted viewer/editor). */
-async function exportBlob(id, mimeType, attempt=0){
-  await getToken(false);
-  let r;
-  try{ r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}/export?mimeType=${encodeURIComponent(mimeType)}`,{headers:{Authorization:'Bearer '+S.token}}); }
-  catch(e){ if(attempt<2){ await sleep(600*(attempt+1)); return exportBlob(id,mimeType,attempt+1); } throw new Error('Network error — check connection'); }
-  if(r.status===401 && attempt<2){ S.token=null; return exportBlob(id,mimeType,attempt+1); }
-  if(!r.ok) throw new Error('Export failed');
-  return r.blob();
-}
 async function driveSearch(query){
   const safe = query.replace(/['\\]/g,'');
   const q = encodeURIComponent(`name contains '${safe}' and trashed=false`);
@@ -1448,7 +1342,6 @@ async function openItem(f){
     } else window.open(f.appProperties.bdlink,'_blank');
     return;
   }
-  if(k==='exe' && f._local){ window.localFS.openPath(f.id); return; }
   if(k==='archive' && f._local && /\.zip$/i.test(f.name)){
     const row=document.createElement('div'); row.className='up-item';
     row.innerHTML=`<div class="nm">Extracting ${esc(f.name)}</div><div class="bar indeterminate"><i></i></div><div class="st">UNZIPPING…</div>`;
@@ -1468,7 +1361,11 @@ async function openItem(f){
     }
     return;
   }
-  openPreview(f);
+  /* BetterDrive is a browser/organizer, not a viewer — every other file kind
+     opens with whatever the OS/user has set as the default app for it,
+     exactly like double-clicking it in Explorer. */
+  if(f._local) window.localFS.openPath(f.id);
+  else window.open(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'), '_blank');
 }
 
 function wireCard(el, f, openFn){
@@ -1745,7 +1642,7 @@ function itemMenu(f, x, y){
   const isFolder = f.mimeType===FOLDER_MIME, isLink = kind(f)==='link';
   const openRow = isFolder ? {label:'Open', fn:()=>openFolder(f)}
     : isLink ? {label:'Open link ↗', fn:()=>openItem(f)}
-    : {label:'Preview', fn:()=>openPreview(f)};
+    : {label:'Open', fn:()=>openItem(f)};
   const secondRow = isLink ? {label:'Copy URL', fn: async ()=>{
       const url = f._local ? new TextDecoder().decode(await window.localFS.readFile(f.id)).trim() : f.appProperties.bdlink;
       navigator.clipboard?.writeText(url); toast('URL copied');
@@ -2013,195 +1910,6 @@ $('#dirpick').onchange=e=>{
 };
 $('#btn-link').onclick=()=> newLinkFlow();
 
-/* ================= PREVIEW ================= */
-const FULLSCREEN_KINDS = ['image','video','audio','text','pdf'];
-function openPreview(f){
-  S.pvFile=f;
-  const k=kind(f);
-  $('#preview').classList.toggle('pv-fullscreen', FULLSCREEN_KINDS.includes(k));
-  $('#pv-title').textContent=f.name;
-  $('#pv-meta').innerHTML = [GLYPH[k]||'FILE', f.size?fmtSize(f.size):null, timeAgo(f.modifiedTime).toUpperCase()]
-    .filter(Boolean).map(x=>`<span>${x}</span>`).join('<span class="sep">·</span>')
-    + (f._local ? `<span class="pv-path" title="Click to copy path">${esc(f.id)}</span>` : '');
-  $('#pv-meta .pv-path')?.addEventListener('click', ()=>{ navigator.clipboard?.writeText(f.id); toast('Path copied'); });
-  const body=$('#pv-body'); body.innerHTML='<div class="loading">Loading</div>';
-  if(S.pvObjectUrl){ URL.revokeObjectURL(S.pvObjectUrl); S.pvObjectUrl=null; }
-
-  if(k==='image'){
-    if(f._local){
-      body.innerHTML=`<img src="${toFileUrl(f.id)}" alt="" onerror="this.parentElement.innerHTML='&lt;div class=&quot;loading&quot;&gt;Could not load image&lt;/div&gt;'">`;
-      wireImageNav(body,f);
-    } else {
-      fetchBlob(f.id).then(b=>{ if(S.pvFile?.id!==f.id) return;
-        S.pvObjectUrl=URL.createObjectURL(b); body.innerHTML=`<img src="${S.pvObjectUrl}" alt="">`;
-        wireImageNav(body,f);
-      }).catch(()=> driveOpenExternal(body,f));
-    }
-  }
-  else if(k==='audio'){
-    body.innerHTML=`<div class="player" id="player">
-      <div class="disc"></div>
-      <div class="seek"><span id="p-cur">0:00</span><input type="range" id="p-seek" min="0" max="1000" value="0"><span id="p-dur">–:––</span></div>
-      <div class="pcontrols"><button class="pbtn" id="p-toggle">PLAY ▸</button></div>
-      <audio id="p-audio"></audio></div>`;
-    const setupAudio=(src)=>{
-      const a=$('#p-audio'); a.src=src;
-      const fmt=t=>{t=Math.floor(t||0);return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')};
-      a.onloadedmetadata=()=> $('#p-dur').textContent=fmt(a.duration);
-      a.ontimeupdate=()=>{ $('#p-cur').textContent=fmt(a.currentTime); if(a.duration) $('#p-seek').value=a.currentTime/a.duration*1000; };
-      a.onended=()=>{ $('#player').classList.remove('playing'); $('#p-toggle').textContent='PLAY ▸'; };
-      $('#p-seek').oninput=e=>{ if(a.duration) a.currentTime=e.target.value/1000*a.duration; };
-      $('#p-toggle').onclick=()=>{ if(a.paused){a.play();$('#player').classList.add('playing');$('#p-toggle').textContent='PAUSE ❚❚';}
-        else{a.pause();$('#player').classList.remove('playing');$('#p-toggle').textContent='PLAY ▸';} };
-    };
-    if(f._local){ setupAudio(toFileUrl(f.id)); }
-    else{
-      fetchBlob(f.id).then(b=>{ if(S.pvFile?.id!==f.id) return;
-        S.pvObjectUrl=URL.createObjectURL(b); setupAudio(S.pvObjectUrl);
-      }).catch(()=> driveOpenExternal(body,f));
-    }
-  }
-  else if(k==='video'){
-    if(f._local){ embedFallback(body,f); }
-    else{
-      fetchBlob(f.id).then(b=>{ if(S.pvFile?.id!==f.id) return;
-        S.pvObjectUrl=URL.createObjectURL(b);
-        body.innerHTML=`<video src="${S.pvObjectUrl}" controls autoplay style="width:100%;height:100%;object-fit:contain"></video>`;
-      }).catch(()=> driveOpenExternal(body,f));
-    }
-  }
-  else if(k==='pdf'||k==='gdoc'){
-    if(f._local){ embedFallback(body,f); }
-    else{
-      /* Docs/Sheets/Slides have no raw bytes to fetch — export to PDF instead,
-         still through our own token, never Google's hosted editor. */
-      const blobPromise = k==='gdoc' ? exportBlob(f.id,'application/pdf') : fetchBlob(f.id);
-      blobPromise.then(b=>{ if(S.pvFile?.id!==f.id) return;
-        S.pvObjectUrl=URL.createObjectURL(b);
-        body.innerHTML=`<iframe src="${S.pvObjectUrl}"></iframe>`;
-        wireIframeEscape(body.querySelector('iframe'));
-      }).catch(()=> driveOpenExternal(body,f));
-    }
-  }
-  else if(k==='text'){
-    if(f._local){ embedFallback(body,f); }
-    else{
-      fetchBlob(f.id).then(async b=>{ if(S.pvFile?.id!==f.id) return;
-        const text = await b.text();
-        body.innerHTML = `<div class="editor-wrap"><textarea id="pv-editor" readonly spellcheck="false">${esc(text)}</textarea>
-          <div class="editor-status">Read-only — Drive text editing isn't wired up yet</div></div>`;
-      }).catch(()=> driveOpenExternal(body,f));
-    }
-  }
-  else{ body.innerHTML=`<div style="text-align:center;padding:40px"><div class="typeglyph" style="font-size:13px;padding:10px 18px">${GLYPH[k]||'FILE'}</div><p style="margin-top:20px;color:var(--dim);font-size:13px">No inline preview for this type.</p></div>`; }
-
-  $('#pv-actions').innerHTML='';
-  const acts=[
-    ...(k==='text' && f._local ? [{l:'Save', fn:()=>{ $('#pv-editor')?._save?.(); }}] : []),
-    ...(f._local
-      ? [{l:'Open with default app', fn:()=> window.localFS.openPath(f.id)}, {l:'Show in folder', fn:()=> window.localFS.showInFolder(f.id)}]
-      : [{l:'Open in Drive ↗', fn:()=>window.open(f.webViewLink,'_blank')}, {l:'Download', fn:()=>downloadFlow(f)}]),
-    {l:'Rename', fn:()=>{ closePreview(); renameFlow(f); }},
-    {l:'Trash', fn:()=>{ closePreview(); trashFlow([f]); }, danger:true},
-  ];
-  acts.forEach(a=>{ const b=document.createElement('button'); b.className='iconbtn'+(a.danger?' btn danger':''); b.textContent=a.l; b.onclick=a.fn; $('#pv-actions').appendChild(b); });
-
-  $('#scrim').classList.add('show'); $('#preview').classList.add('show');
-}
-async function openTextEditor(body, f){
-  body.classList.add('editor-body');
-  body.innerHTML=`<div class="loading">Loading</div>`;
-  let original;
-  try{
-    const buf = await window.localFS.readFile(f.id);
-    original = new TextDecoder().decode(buf);
-  }catch(e){ body.innerHTML=`<div class="loading">Could not read file</div>`; return; }
-  if(S.pvFile?.id!==f.id) return;
-  body.innerHTML=`<div class="editor-wrap">
-    <textarea id="pv-editor" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
-    <div class="editor-status" id="editor-status">Ctrl+S to save</div>
-  </div>`;
-  const ta=$('#pv-editor'); ta.value=original;
-  const status=$('#editor-status');
-  const markDirty=()=>{ status.textContent='Unsaved changes · Ctrl+S'; status.classList.add('dirty'); };
-  const markClean=()=>{ status.textContent='Saved ✓'; status.classList.remove('dirty'); setTimeout(()=>{ if(status) status.textContent='Ctrl+S to save'; },1600); };
-  ta.oninput=markDirty;
-  const save=async ()=>{
-    try{
-      const buf=new TextEncoder().encode(ta.value).buffer;
-      await window.localFS.writeFile(f.id, buf);
-      markClean();
-      delete S.cache[currentFolderId()];
-    }catch(e){ status.textContent='Save failed — '+e.message; }
-  };
-  ta.onkeydown=e=>{ if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); save(); } };
-  ta._save = save;
-  ta.focus();
-}
-
-function wireImageNav(body,f){
-  const imgs=(S.displayOrder||[]).filter(x=>kind(x)==='image');
-  const idx=imgs.findIndex(x=>x.id===f.id);
-  if(idx<0 || imgs.length<2) return;
-  const prev=document.createElement('button'); prev.className='pv-nav prev'; prev.innerHTML='‹';
-  const next=document.createElement('button'); next.className='pv-nav next'; next.innerHTML='›';
-  const counter=document.createElement('div'); counter.className='pv-counter'; counter.textContent=(idx+1)+' / '+imgs.length;
-  prev.onclick=e=>{ e.stopPropagation(); openPreview(imgs[(idx-1+imgs.length)%imgs.length]); };
-  next.onclick=e=>{ e.stopPropagation(); openPreview(imgs[(idx+1)%imgs.length]); };
-  body.append(prev,next,counter);
-}
-/* an iframe's content is a separate document — Escape pressed inside it never
-   bubbles to our window-level keydown listener. This works for both local
-   file:// PDFs and Drive-exported blob: PDFs (both same-origin with the page
-   that created them); the close button remains the fallback either way. */
-function wireIframeEscape(iframe){
-  iframe?.addEventListener('load', ()=>{
-    try{ iframe.contentWindow.addEventListener('keydown', e=>{ if(e.key==='Escape') closePreview(); }); }
-    catch(e){ /* cross-origin — nothing we can do from here */ }
-  });
-}
-/* local-file preview only — Drive-backed files never reach here (openPreview
-   fetches their real bytes through our own OAuth token instead, see above),
-   so this never needs to embed anything that'd demand a separate sign-in. */
-function embedFallback(body,f){
-  const k=kind(f);
-  if(k==='video'){
-    body.innerHTML=`<video src="${toFileUrl(f.id)}" controls autoplay style="width:100%;height:100%;object-fit:contain"></video>`;
-  } else if(k==='pdf'){
-    body.innerHTML=`<iframe src="${toFileUrl(f.id)}"></iframe>`;
-    wireIframeEscape(body.querySelector('iframe'));
-  } else if(k==='text'){
-    openTextEditor(body, f);
-  } else {
-    body.innerHTML=`<div style="text-align:center;padding:40px"><div class="typeglyph" style="font-size:13px;padding:10px 18px">${GLYPH[k]||'FILE'}</div>
-      <p style="margin-top:20px;color:var(--dim);font-size:13px">No inline preview — open with your default app instead.</p></div>`;
-  }
-}
-/* shown when a Drive file's bytes can't be fetched through our token (network
-   blip, permission edge case) — opens in the user's real browser instead of
-   ever embedding Google's own hosted viewer, which would demand a completely
-   separate sign-in Electron's isolated session has no way to satisfy. */
-function driveOpenExternal(body,f){
-  const k=kind(f);
-  body.innerHTML=`<div style="text-align:center;padding:40px">
-    <div class="typeglyph" style="font-size:13px;padding:10px 18px">${GLYPH[k]||'FILE'}</div>
-    <p style="margin-top:20px;color:var(--dim);font-size:13px">Couldn't preview this here — open it in your browser instead.</p>
-    <button class="btn solid" id="pv-open-external" style="margin-top:18px">Open in Drive ↗</button>
-  </div>`;
-  body.querySelector('#pv-open-external').onclick = ()=> window.open(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'), '_blank');
-}
-function closePreview(){
-  $('#scrim').classList.remove('show'); $('#preview').classList.remove('show');
-  const a=$('#p-audio'); if(a) a.pause();
-  if(S.pvObjectUrl){ setTimeout(()=>{URL.revokeObjectURL(S.pvObjectUrl); S.pvObjectUrl=null;},600); }
-  S.pvFile=null;
-}
-$('#pv-close').onclick=closePreview; $('#scrim').onclick=closePreview;
-/* redundant safety net: catch Escape here too, in capture phase, in case some
-   focused child (e.g. the text editor textarea) ever stops it from bubbling
-   up to the window-level handler */
-$('#preview').addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePreview(); } }, true);
-
 /* ================= SEARCH ================= */
 let searchTimer=null, searchSeq=0;
 $('#search').addEventListener('input', e=>{
@@ -2367,18 +2075,10 @@ addEventListener('keydown', e=>{
     if($('#palette').classList.contains('show')) return closePalette();
     if($('#pcbrowse').classList.contains('show')) return closePCBrowser();
     if(modalOpen) return closeModal();
-    if($('#preview').classList.contains('show')) return closePreview();
     if(S.selection.size) return clearSelection();
     if(S.searching){ exitSearch(); loadCurrentFromCacheOnly(); return; }
     if(!atZoneRoot()) return goBack();
     if(S.keyMode==='browse'){ S.keyMode='worlds'; syncKB(); } /* root: drop back to world-select */
-    return;
-  }
-  if((e.key==='ArrowLeft'||e.key==='ArrowRight') && $('#preview').classList.contains('show') && S.pvFile && kind(S.pvFile)==='image'){
-    e.preventDefault();
-    const imgs=(S.displayOrder||[]).filter(x=>kind(x)==='image');
-    const idx=imgs.findIndex(x=>x.id===S.pvFile.id);
-    if(idx>=0 && imgs.length>1) openPreview(imgs[(idx+(e.key==='ArrowRight'?1:-1)+imgs.length)%imgs.length]);
     return;
   }
   if(isTyping() || modalOpen) return; /* digits/backspace belong to the input */
@@ -2428,9 +2128,8 @@ addEventListener('keydown', e=>{
   }
   if(e.key===' '){
     e.preventDefault();
-    if($('#preview').classList.contains('show')) return closePreview();
     const t=focusedItem() || S.lastItem;
-    if(t && t.mimeType!==FOLDER_MIME && kind(t)!=='link'){ S.lastItem=t; openPreview(t); }
+    if(t){ S.lastItem=t; openItem(t); }
     return;
   }
   if(e.key==='/'){ e.preventDefault(); $('#search').focus(); return; }
@@ -2438,7 +2137,6 @@ addEventListener('keydown', e=>{
   if(e.key.toLowerCase()==='n' && !e.ctrlKey && !e.metaKey && !e.altKey && !S.searching){ e.preventDefault(); newFolderFlow(); return; }
   if(e.key==='Backspace'){
     e.preventDefault();
-    if($('#preview').classList.contains('show')) return closePreview();
     if(S.searching){ exitSearch(); loadCurrentFromCacheOnly(); return; }
     if(!atZoneRoot()) return goBack();
     if(S.keyMode==='browse'){ S.keyMode='worlds'; syncKB(); }
@@ -2536,8 +2234,7 @@ function showHelp(){
     <kbd>1 – 9</kbd><span>Pick a world · same digit again unlocks cards</span>
     <kbd>← →</kbd><span>Cycle worlds (at world root)</span>
     <kbd>↑ ↓ ← →</kbd><span>Walk the cards once unlocked</span>
-    <kbd>Enter</kbd><span>Open the focused card</span>
-    <kbd>Space</kbd><span>Quick look — preview / close</span>
+    <kbd>Enter &nbsp;or&nbsp; Space</kbd><span>Open the focused card (default app)</span>
     <kbd>R</kbd><span>Rename focused or selected</span>
     <kbd>N</kbd><span>New folder</span>
     <kbd>S &nbsp;or&nbsp; /</kbd><span>Search</span>
