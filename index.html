@@ -74,6 +74,10 @@ input{font-family:inherit;color:inherit}
 @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 @keyframes riseCenterX{from{opacity:0;transform:translateX(-50%) translateY(14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+/* the app's own opening reveal — a plain opacity fade reads as an abrupt
+   on/off snap once you're looking for it; a hair of scale gives it a
+   deliberate "settle into place" feel instead, without being showy about it. */
+@keyframes appOpen{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:scale(1)}}
 @keyframes slideInR{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes pulseGlow{0%,100%{text-shadow:0 0 18px rgba(246,242,230,.35)}50%{text-shadow:0 0 30px rgba(246,242,230,.6)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
@@ -125,7 +129,7 @@ input{font-family:inherit;color:inherit}
 .field input::placeholder{color:rgba(142,136,123,.5)}
 
 /* ============ APP SHELL ============ */
-#app{position:relative;z-index:1;min-height:100vh;animation:fadeIn .6s var(--ease) both}
+#app{position:relative;z-index:1;min-height:100vh;animation:appOpen .7s var(--ease) both;transform-origin:center}
 
 .topbar{
   position:sticky;top:0;z-index:40;
@@ -1709,7 +1713,17 @@ function scroller(){ return document.scrollingElement || document.documentElemen
    scroll: if the listing actually changed it swaps in place, otherwise it does
    nothing at all. That's what turns a spurious Windows change event from a
    black flash into a no-op. */
+let loadSeq = 0;
 async function loadCurrent(opts={}){
+  /* switching worlds/folders quickly (tap Pictures, then Documents before
+     Pictures' listing has actually resolved) used to let the stale, slower
+     fetch land AFTER the newer one and silently overwrite the screen with
+     the wrong world's content — the exact same class of bug as the search
+     race fixed earlier, and the same fix: a sequence number, bumped on every
+     call, checked after the only await in the function, so a fetch that's no
+     longer for the current navigation just discards itself instead of
+     rendering. */
+  const seq = ++loadSeq;
   const refresh = opts.refresh===true;
   const fid=currentFolderId();
   syncWatch();
@@ -1724,6 +1738,7 @@ async function loadCurrent(opts={}){
   }
   try{
     const fresh = await listChildren(fid);
+    if(seq!==loadSeq) return; /* a newer navigation already owns the screen */
     const changed = !cached || listSig(fresh)!==listSig(cached.files);
     S.cache[fid]={files:fresh, ts:Date.now()};
     const size=fresh.reduce((a,f)=>a+(+f.size||0),0);
@@ -1735,6 +1750,7 @@ async function loadCurrent(opts={}){
       await renderItemsWithShimmer(fresh, !cached); /* animate only on first paint; silent swap if cache was shown */
     } else { renderCrumb(); }
   }catch(e){
+    if(seq!==loadSeq) return;
     if(refresh) return;   // background sync: fail silently, keep showing what's there
     if(!cached){ $('#stage').innerHTML=`<div class="empty"><div class="big">Couldn't load</div><p>${esc(e.message)}</p></div>`; }
     toast(e.message,true);

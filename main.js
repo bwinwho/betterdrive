@@ -139,7 +139,12 @@ function createWindow() {
     icon: path.join(__dirname, 'icons', 'icon-512.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: true },
   });
-  win.once('ready-to-show', () => win.show());
+  /* 'ready-to-show' fires on first paint, which on Windows can land a frame or
+     two before the GPU compositor has actually swapped in that paint — showing
+     the window right on that event can still flash the default white behind
+     it for an instant. A short extra delay gives the compositor time to catch
+     up before the window becomes visible at all. */
+  win.once('ready-to-show', () => setTimeout(() => { if (win && !win.isDestroyed()) win.show(); }, 60));
   win.loadFile('index.html');
   /* window.open() calls (Open in Drive, saved link cards) have no explicit
      handler by default, which would pop an unhardened Electron window with no
