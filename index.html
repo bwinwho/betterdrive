@@ -74,10 +74,6 @@ input{font-family:inherit;color:inherit}
 @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 @keyframes riseCenterX{from{opacity:0;transform:translateX(-50%) translateY(14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-/* the app's own opening reveal — a plain opacity fade reads as an abrupt
-   on/off snap once you're looking for it; a hair of scale gives it a
-   deliberate "settle into place" feel instead, without being showy about it. */
-@keyframes appOpen{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:scale(1)}}
 @keyframes slideInR{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes pulseGlow{0%,100%{text-shadow:0 0 18px rgba(246,242,230,.35)}50%{text-shadow:0 0 30px rgba(246,242,230,.6)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
@@ -129,7 +125,15 @@ input{font-family:inherit;color:inherit}
 .field input::placeholder{color:rgba(142,136,123,.5)}
 
 /* ============ APP SHELL ============ */
-#app{position:relative;z-index:1;min-height:100vh;animation:appOpen .7s var(--ease) both;transform-origin:center}
+/* #app wraps #zonebar/#bottom-scrim/#selectbar/#clipbar, all position:fixed —
+   giving #app itself any transform (or filter) at all, even a held scale(1)
+   from a finished animation's fill-mode, makes it a containing block for
+   those descendants and un-pins them from the viewport (they start tracking
+   #app's own box instead, which can be many times taller than the screen).
+   This exact bug shipped once already: the zonebar ended up thousands of
+   pixels down the page, invisible until scrolled all the way down. Keep
+   #app's own entrance animation to opacity only — no transform, ever. */
+#app{position:relative;z-index:1;min-height:100vh;animation:fadeIn .6s var(--ease) both}
 
 .topbar{
   position:sticky;top:0;z-index:40;
