@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, screen } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -113,6 +113,25 @@ function scheduleSuspendCheck(delay) {
   }, delay);
 }
 
+/* Windows doesn't reliably re-fit a real OS-fullscreen (fullscreen:true, not
+   just maximized) window when the display topology changes — unplug an
+   external monitor and the window can keep the bounds it had on the monitor
+   that just vanished, leaving dead space at the bottom (sized for a taskbar
+   that isn't there on this display) that resizable:false gives no way to
+   fix by hand. Toggling fullscreen off and back on forces Chromium to
+   recompute geometry against whatever display the window is actually on now
+   — a plain setBounds call doesn't reliably trigger that recalculation.
+   Debounced since a hotplug can fire several metrics-changed events in a row. */
+let realignTimer = null;
+function realignFullscreen() {
+  clearTimeout(realignTimer);
+  realignTimer = setTimeout(() => {
+    if (!win || win.isDestroyed()) return;
+    win.setFullScreen(false);
+    setImmediate(() => { if (win && !win.isDestroyed()) win.setFullScreen(true); });
+  }, 300);
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 920,
@@ -141,6 +160,9 @@ app.whenReady().then(async () => {
   await ensureDir(ROOT);
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  screen.on('display-added', realignFullscreen);
+  screen.on('display-removed', realignFullscreen);
+  screen.on('display-metrics-changed', realignFullscreen);
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
