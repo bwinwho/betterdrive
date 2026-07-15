@@ -1458,7 +1458,7 @@ function fileCard(f, i, num){
   const titleMeta = `
     <div class="title"><span class="ttx">${esc(displayName(f))}</span></div>
     <div class="meta">
-      ${k==='link'?`<span>${esc(hostOf(f.appProperties.bdlink))}</span><span class="sep">·</span>`:(f.size?`<span>${fmtSize(f.size)}</span><span class="sep">·</span>`:'')}
+      ${k==='link'?(f._local?'':`<span>${esc(hostOf(f.appProperties.bdlink))}</span><span class="sep">·</span>`):(f.size?`<span>${fmtSize(f.size)}</span><span class="sep">·</span>`:'')}
       <span>${k==='link'?'LINK ↗':timeAgo(f.modifiedTime).toUpperCase()}</span>
     </div>`;
   el.innerHTML = `
@@ -1703,11 +1703,20 @@ function syncWatch(){
    show the shimmer for at least one paint before building the real grid, so it
    reads as "loading" instead of a broken flash. */
 const BIG_FOLDER_THRESHOLD = 60;
-async function renderItemsWithShimmer(items, animate){
+/* seq is loadCurrent's own staleness token (see loadSeq below) — the first
+   fix for the zone-switch race only checked it after listChildren's await,
+   but this function has its own await (the skeleton delay for big folders):
+   switching Pictures -> Documents fast enough let Pictures' *cached* render
+   pass its staleness check, then sit through this delay, and land on screen
+   after Documents' own (faster, no-shimmer-needed) render already showed —
+   clobbering it right back to Pictures. Checking again here, on the far side
+   of this function's own await, closes that window too. */
+async function renderItemsWithShimmer(items, animate, seq){
   if(items.length > BIG_FOLDER_THRESHOLD){
     skeleton();
     await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
   }
+  if(seq!==undefined && seq!==loadSeq) return;
   S.items = mergeLinked(items);
   renderStage(animate);
 }
@@ -1735,7 +1744,7 @@ async function loadCurrent(opts={}){
   const keepScroll = refresh ? (scroller().scrollTop||0) : 0;
   if(!refresh){
     clearSelection();
-    if(cached) await renderItemsWithShimmer(cached.files, true);
+    if(cached) await renderItemsWithShimmer(cached.files, true, seq);
     else skeleton();
     scroller().scrollTop = 0;   // a fresh navigation always opens at the top
     persistPath();
@@ -1751,7 +1760,7 @@ async function loadCurrent(opts={}){
     if(refresh){
       if(changed){ S.items=mergeLinked(fresh); renderStage(false); scroller().scrollTop = keepScroll; }
     } else if(changed){
-      await renderItemsWithShimmer(fresh, !cached); /* animate only on first paint; silent swap if cache was shown */
+      await renderItemsWithShimmer(fresh, !cached, seq); /* animate only on first paint; silent swap if cache was shown */
     } else { renderCrumb(); }
   }catch(e){
     if(seq!==loadSeq) return;
