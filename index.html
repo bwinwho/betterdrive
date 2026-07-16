@@ -1372,8 +1372,14 @@ function renderStage(animate=true){
   stage.classList.toggle('no-anim', !animate);
   if(S.searching) return;
   renderCrumb();
-  const folders = sorted(S.items.filter(f=>f.mimeType===FOLDER_MIME));
-  const files   = sorted(S.items.filter(f=>f.mimeType!==FOLDER_MIME));
+  /* Pictures is a gallery, not a general-purpose folder browser — folders and
+     any non-image file that happens to live there (docs, videos, etc.) are
+     filtered out of the grid entirely, at any depth inside the world, not
+     just its root. Folder creation/upload elsewhere is untouched; this is
+     purely what gets rendered. */
+  const picturesOnly = zone()?.osKey==='pictures';
+  const folders = picturesOnly ? [] : sorted(S.items.filter(f=>f.mimeType===FOLDER_MIME));
+  const files   = sorted(S.items.filter(f=>f.mimeType!==FOLDER_MIME && (!picturesOnly || kind(f)==='image')));
   S.displayOrder = [...folders, ...files];
   let i=0, num=0;
 
@@ -1396,7 +1402,9 @@ function renderStage(animate=true){
   }
   if(!folders.length && !files.length){
     const empty=document.createElement('div'); empty.className='empty';
-    empty.innerHTML=`<div class="big">Nothing here yet</div><p>Drop files anywhere to upload</p>`;
+    empty.innerHTML = (picturesOnly && S.items.length)
+      ? `<div class="big">No pictures here</div><p>This folder has files, just none that are images</p>`
+      : `<div class="big">Nothing here yet</div><p>Drop files anywhere to upload</p>`;
     frag.appendChild(empty);
   }
   stage.replaceChildren(frag);
