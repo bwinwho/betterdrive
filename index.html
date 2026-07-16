@@ -305,11 +305,24 @@ input{font-family:inherit;color:inherit}
   position:relative;width:100%;height:96px;margin-bottom:16px;border-radius:3px;overflow:hidden;
   background:rgba(234,228,214,.03);
 }
-.card .lthumb-wrap img{
-  width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s var(--ease);
-  filter:saturate(.85) contrast(1.02);
+/* shimmer placeholder sits behind the image until it has decoded — :has()
+   flips it off the instant the <img> gains .loaded, so an image that's slow
+   to decode keeps pulsing instead of showing a dead grey box. */
+.card .lthumb-wrap::before{
+  content:'';position:absolute;inset:0;z-index:0;opacity:1;transition:opacity .4s var(--ease);
+  background:linear-gradient(100deg,rgba(234,228,214,.02) 30%,rgba(234,228,214,.07) 50%,rgba(234,228,214,.02) 70%);
+  background-size:200% 100%;animation:shimmer 1.5s linear infinite;
 }
-.card .lthumb-wrap img.loaded{opacity:1}
+.card .lthumb-wrap:has(img.loaded)::before{opacity:0}
+/* blur-up: the photo fades AND un-blurs from a slightly-scaled blurred state
+   into its final crisp frame — a low-cost stand-in for a real LQIP that still
+   reads as a deliberate "developing" reveal rather than a hard pop-in. */
+.card .lthumb-wrap img{
+  position:relative;z-index:1;width:100%;height:100%;object-fit:cover;
+  opacity:0;transform:scale(1.06);filter:blur(14px) saturate(.85) contrast(1.02);
+  transition:opacity .55s var(--ease),transform .55s var(--ease),filter .55s var(--ease);
+}
+.card .lthumb-wrap img.loaded{opacity:1;transform:scale(1);filter:blur(0) saturate(.85) contrast(1.02)}
 .card .lthumb-wrap::after{
   content:'';position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(to bottom, transparent 0%, transparent 40%, var(--card) 100%),
@@ -342,6 +355,30 @@ input{font-family:inherit;color:inherit}
 .card.file.image-cover:hover .caption{opacity:1}
 .card.file.image-cover .title{text-shadow:0 2px 12px rgba(0,0,0,.6)}
 .card.file.image-cover .meta{text-shadow:0 1px 8px rgba(0,0,0,.6)}
+
+/* ---------- Pictures = gallery: bigger, edge-to-edge, tightly packed,
+   image-first. Metadata is fully hidden at rest (not the 30% the normal
+   image-cover card uses) and only surfaces on hover, alongside a soft
+   zoom / elevation / glow so it reads like a modern photo gallery. All
+   hover motion is transform/opacity only, so it stays GPU-cheap at 60fps
+   even across a wall of photos. ---------- */
+.grid-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),1fr));gap:6px}
+.grid-gallery .card.file.image-cover{
+  min-height:230px;border-radius:7px;border-color:transparent;
+  box-shadow:0 1px 2px rgba(0,0,0,.3);animation-delay:calc(var(--i,0)*22ms);
+}
+.grid-gallery .card.file.image-cover .lthumb-wrap{border-radius:7px}
+.grid-gallery .card.file.image-cover .lthumb-wrap img{transition:opacity .55s var(--ease),transform .6s var(--ease),filter .55s var(--ease)}
+.grid-gallery .card.file.image-cover .caption{opacity:0;transform:translateY(6px);transition:opacity .3s var(--ease),transform .3s var(--ease)}
+.grid-gallery .card.file.image-cover:hover .caption{opacity:1;transform:translateY(0)}
+.grid-gallery .card.file.image-cover:hover{
+  transform:translateY(-5px);z-index:3;border-color:rgba(234,228,214,.28);
+  box-shadow:0 24px 54px rgba(0,0,0,.55),0 0 0 1px rgba(234,228,214,.22);
+}
+/* the photo itself zooms slightly within the card's clipped bounds — the
+   card's overflow:hidden keeps the scaled image from bleeding onto neighbours. */
+.grid-gallery .card.file.image-cover:hover .lthumb-wrap img.loaded{transform:scale(1.07)}
+.grid-gallery .section-label{display:none}
 .card .typeglyph{
   font-family:var(--mono);font-size:10px;letter-spacing:.25em;color:var(--dim);
   border:1px solid var(--faint);display:inline-block;padding:5px 10px;border-radius:2px;margin-bottom:16px;
@@ -656,6 +693,74 @@ body.electron #app{padding-top:38px}
 body.electron .topbar{top:38px}
 body.electron .wordmark{display:none}
 
+/* ============ FULL-SCREEN IMAGE VIEWER ============
+   A lightweight hand-rolled lightbox (no library — the old library-based
+   Preview Engine was reverted for breaking on real devices). Sits ABOVE the
+   modal since it's a self-contained immersive surface that never hosts a
+   modal of its own, and so it closes first on Escape. All motion is
+   transform/opacity for GPU-cheap 60fps navigation. */
+#viewer-scrim{position:fixed;inset:0;z-index:94;background:#060605;opacity:0;pointer-events:none;transition:opacity .3s var(--ease)}
+#viewer-scrim.show{opacity:.97;pointer-events:auto}
+#viewer{
+  position:fixed;inset:0;z-index:95;display:flex;flex-direction:column;
+  opacity:0;pointer-events:none;transition:opacity .3s var(--ease);
+}
+#viewer.show{opacity:1;pointer-events:auto}
+/* grid place-items:center stacks the outgoing + incoming image in one cell,
+   both centred, so the slide transforms play on top of a stable centre
+   instead of fighting a layout-based centring. */
+.vw-stage{position:relative;flex:1;overflow:hidden;display:grid;place-items:center}
+.vw-img{
+  grid-area:1/1;max-width:92vw;max-height:82vh;object-fit:contain;
+  border-radius:3px;box-shadow:0 30px 90px rgba(0,0,0,.7);
+  will-change:transform,opacity;
+}
+/* enter/leave states for the fade+slide+scale transition; direction is set
+   inline per-navigation via the --dir custom property (+1 next, -1 prev). */
+.vw-img.enter{opacity:0;transform:translateX(calc(var(--dir,1)*46px)) scale(.975)}
+.vw-img.settled{opacity:1;transform:translateX(0) scale(1);transition:opacity .34s var(--ease),transform .42s var(--spring)}
+.vw-img.leave{opacity:0;transform:translateX(calc(var(--dir,1)*-40px)) scale(.985);transition:opacity .3s var(--ease),transform .34s var(--ease)}
+.vw-img.blur{filter:blur(16px);transition:filter .4s var(--ease)}
+.vw-img.blur.ready{filter:blur(0)}
+.vw-nav{
+  position:absolute;top:50%;transform:translateY(-50%);z-index:2;
+  width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  color:var(--cream);font-size:26px;line-height:1;
+  background:rgba(20,20,18,.5);border:1px solid var(--faint-2);backdrop-filter:blur(6px);
+  opacity:.55;transition:opacity .25s var(--ease),background .25s var(--ease),transform .25s var(--ease);
+}
+.vw-nav:hover{opacity:1;background:rgba(30,30,27,.7)}
+.vw-nav.vw-prev{left:24px}.vw-nav.vw-prev:hover{transform:translateY(-50%) translateX(-2px)}
+.vw-nav.vw-next{right:24px}.vw-nav.vw-next:hover{transform:translateY(-50%) translateX(2px)}
+.vw-nav.hidden{display:none}
+.vw-close{
+  position:absolute;top:22px;right:26px;z-index:3;
+  font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--dim);
+  padding:8px 12px;border:1px solid var(--faint-2);border-radius:2px;background:rgba(20,20,18,.5);
+  transition:color .25s var(--ease),border-color .25s var(--ease);
+}
+.vw-close:hover{color:var(--cream);border-color:var(--faint-2)}
+.vw-info{
+  position:absolute;left:26px;bottom:16px;z-index:3;max-width:60vw;pointer-events:none;
+  opacity:.55;transition:opacity .3s var(--ease);
+}
+#viewer:hover .vw-info{opacity:1}
+.vw-info .vw-name{font-family:var(--serif);font-size:22px;font-weight:500;color:var(--cream);text-shadow:0 2px 14px rgba(0,0,0,.8);word-break:break-word;line-height:1.15}
+.vw-info .vw-meta{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-top:6px;text-shadow:0 1px 8px rgba(0,0,0,.8)}
+.vw-count{position:absolute;top:24px;left:26px;z-index:3;font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--dim)}
+.vw-strip{
+  flex-shrink:0;height:74px;display:flex;gap:7px;align-items:center;padding:10px 16px;
+  overflow-x:auto;overflow-y:hidden;background:rgba(8,8,7,.6);border-top:1px solid var(--faint);
+}
+.vw-strip::-webkit-scrollbar{display:none}
+.vw-thumb{
+  flex-shrink:0;width:74px;height:54px;border-radius:3px;overflow:hidden;cursor:pointer;
+  opacity:.42;border:1px solid transparent;transition:opacity .25s var(--ease),border-color .25s var(--ease),transform .25s var(--ease);
+}
+.vw-thumb img{width:100%;height:100%;object-fit:cover}
+.vw-thumb:hover{opacity:.8}
+.vw-thumb.active{opacity:1;border-color:var(--cream);transform:translateY(-2px)}
+
 @media(max-width:640px){
   .topbar{flex-wrap:wrap;gap:12px}
   .searchwrap{order:3;max-width:100%;flex-basis:100%}
@@ -823,6 +928,18 @@ body.electron .wordmark{display:none}
     <span class="pcb-count" id="hideout-count">0 hidden</span>
     <div class="pcb-spacer"></div>
   </div>
+</div>
+
+<!-- full-screen image viewer (gallery lightbox) -->
+<div id="viewer-scrim"></div>
+<div id="viewer">
+  <div class="vw-stage" id="vw-stage"></div>
+  <button class="vw-nav vw-prev" id="vw-prev">‹</button>
+  <button class="vw-nav vw-next" id="vw-next">›</button>
+  <button class="vw-close" id="vw-close">ESC</button>
+  <div class="vw-count" id="vw-count"></div>
+  <div class="vw-info" id="vw-info"></div>
+  <div class="vw-strip" id="vw-strip"></div>
 </div>
 
 <div id="uploads"></div>
@@ -1395,8 +1512,8 @@ function renderStage(animate=true){
     frag.appendChild(g);
   }
   if(files.length){
-    const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Files'; frag.appendChild(lbl);
-    const g=document.createElement('div'); g.className='grid-files';
+    if(!picturesOnly){ const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Files'; frag.appendChild(lbl); }
+    const g=document.createElement('div'); g.className = picturesOnly ? 'grid-gallery' : 'grid-files';
     files.forEach(f=> g.appendChild(fileCard(f, i++, ++num)));
     frag.appendChild(g);
   }
@@ -1478,7 +1595,7 @@ function fileCard(f, i, num){
     ${imageCover ? `<div class="caption">${titleMeta}</div>` : titleMeta}
     <button class="more">⋯</button>`;
   wireCard(el, f, ()=> openItem(f));
-  if(localImg) observeThumb(el, f);
+  if(localImg) observeThumb(el);
   else if(f._local && IS_ELECTRON) observeNativeIcon(el, f);
   return el;
 }
@@ -1502,22 +1619,40 @@ function observeNativeIcon(el, f){
   iconObserver.observe(el);
 }
 
-let thumbObserver=null;
-function observeThumb(el, f){
-  if(!thumbObserver){
-    thumbObserver = new IntersectionObserver((entries)=>{
-      entries.forEach(entry=>{
-        if(!entry.isIntersecting) return;
-        thumbObserver.unobserve(entry.target);
-        const img = entry.target.querySelector('.lthumb-wrap img');
-        if(!img) return;
-        img.onload=()=> img.classList.add('loaded');
-        img.onerror=()=> entry.target.querySelector('.lthumb-wrap')?.remove();
-        img.src = toFileUrl(entry.target.dataset.id);
-      });
-    }, {rootMargin:'200px'});
+/* Two observers give hysteresis so image-heavy folders don't thrash:
+   - loadObs (near, 500px margin) LOADS a thumb as it approaches the viewport.
+   - freeObs (far, 1500px margin) RELEASES a thumb's decoded bytes only once
+     it's well outside view, reloading it (near-instant off the OS disk cache,
+     masked by the blur-up) when it comes back. The 1000px gap between the two
+     boundaries means a normal scroll never crosses both at once, so nothing
+     flickers. This is the "release image memory when it leaves the viewport"
+     behaviour without the risk of full DOM windowing in a single-file app. */
+let loadObs=null, freeObs=null;
+function loadThumb(el){
+  const img = el.querySelector('.lthumb-wrap img');
+  if(!img || img.dataset.src) return;           // already loading/loaded
+  const src = toFileUrl(el.dataset.id);
+  img.dataset.src = src;
+  const reveal = ()=>{ if(img.dataset.src===src) img.classList.add('loaded'); };
+  img.onerror = ()=> el.querySelector('.lthumb-wrap')?.remove();
+  img.src = src;
+  /* decode off the main thread where supported, so a big JPEG doesn't stall
+     scrolling on the frame it first paints; fall back to onload otherwise. */
+  if(img.decode) img.decode().then(reveal).catch(reveal); else img.onload = reveal;
+}
+function freeThumb(el){
+  const img = el.querySelector('.lthumb-wrap img');
+  if(!img || !img.dataset.src) return;
+  img.classList.remove('loaded');
+  img.removeAttribute('src');
+  delete img.dataset.src;
+}
+function observeThumb(el){
+  if(!loadObs){
+    loadObs = new IntersectionObserver((es)=> es.forEach(e=>{ if(e.isIntersecting) loadThumb(e.target); }), {rootMargin:'500px'});
+    freeObs = new IntersectionObserver((es)=> es.forEach(e=>{ if(!e.isIntersecting) freeThumb(e.target); }), {rootMargin:'1500px'});
   }
-  thumbObserver.observe(el);
+  loadObs.observe(el); freeObs.observe(el);
 }
 
 async function openItem(f){
@@ -1550,12 +1685,113 @@ async function openItem(f){
     }
     return;
   }
-  /* BetterDrive is a browser/organizer, not a viewer — every other file kind
-     opens with whatever the OS/user has set as the default app for it,
+  /* Pictures is a gallery — clicking a photo there opens the in-app immersive
+     viewer instead of the OS default app. Everywhere else BetterDrive stays a
+     browser/organizer, not a viewer: every other file kind (and images outside
+     the gallery) opens with whatever the OS/user has set as its default app,
      exactly like double-clicking it in Explorer. */
+  if(k==='image' && f._local && zone()?.osKey==='pictures') return openViewer(f);
   if(f._local) window.localFS.openPath(f.id);
   else window.open(f.webViewLink||('https://drive.google.com/file/d/'+f.id+'/view'), '_blank');
 }
+
+/* ================= IMAGE VIEWER (gallery lightbox) ================= */
+const V = { list:[], idx:0 };
+function viewerImgSrc(f){
+  return f._local ? toFileUrl(f.id) : (f.thumbnailLink ? f.thumbnailLink.replace(/=s\d+/,'=s1600') : '');
+}
+function openViewer(f){
+  /* the gallery's own render already narrows Pictures to just image files, so
+     S.displayOrder IS the ordered photo set — no re-filtering surprises. */
+  const imgs = S.displayOrder.filter(x=> x.mimeType!==FOLDER_MIME && kind(x)==='image');
+  if(!imgs.length) return;
+  V.list = imgs;
+  V.idx = Math.max(0, imgs.findIndex(x=> x.id===f.id));
+  $('#viewer-scrim').classList.add('show');
+  $('#viewer').classList.add('show');
+  buildViewerStrip();
+  showViewerImage(0);
+  updateViewerChrome();
+}
+function closeViewer(){
+  $('#viewer-scrim').classList.remove('show');
+  $('#viewer').classList.remove('show');
+  /* drop the full-res bitmaps once the fade-out is done so a big gallery
+     doesn't keep them decoded in memory after the viewer is dismissed. */
+  setTimeout(()=>{
+    if($('#viewer').classList.contains('show')) return;
+    $('#vw-stage').innerHTML=''; $('#vw-strip').innerHTML='';
+  }, 340);
+}
+function showViewerImage(dir){
+  const f = V.list[V.idx];
+  const stage = $('#vw-stage');
+  const old = stage.querySelector('.vw-img.settled');
+  const img = document.createElement('img');
+  img.className='vw-img blur enter';
+  img.style.setProperty('--dir', dir>=0?1:-1);
+  img.decoding='async';
+  const reveal = ()=> img.classList.add('ready');
+  img.onerror = reveal;
+  img.src = viewerImgSrc(f);
+  if(img.decode) img.decode().then(reveal).catch(reveal); else img.onload = reveal;
+  stage.appendChild(img);
+  /* two rAFs: append at the enter offset, let the browser paint that frame,
+     then flip to settled so the transition actually runs (a single frame
+     would coalesce append+settle and skip the animation). */
+  requestAnimationFrame(()=> requestAnimationFrame(()=>{
+    img.classList.remove('enter'); img.classList.add('settled');
+    if(old){
+      old.style.setProperty('--dir', dir>=0?1:-1);
+      old.classList.remove('settled'); old.classList.add('leave');
+      old.addEventListener('transitionend', ()=> old.remove(), {once:true});
+      setTimeout(()=>{ if(old.isConnected) old.remove(); }, 520);
+    }
+  }));
+  prefetchViewerNeighbors();
+}
+function viewerGo(delta){
+  const n=V.list.length; if(n<2) return;
+  V.idx = (V.idx + delta + n) % n;
+  showViewerImage(delta);
+  updateViewerChrome();
+}
+function updateViewerChrome(){
+  const f = V.list[V.idx];
+  $('#vw-count').textContent = (V.idx+1)+' / '+V.list.length;
+  $('#vw-info').innerHTML = `<div class="vw-name">${esc(displayName(f))}</div><div class="vw-meta">${f.size?fmtSize(f.size)+' · ':''}${timeAgo(f.modifiedTime).toUpperCase()}</div>`;
+  const single = V.list.length<2;
+  $('#vw-prev').classList.toggle('hidden', single);
+  $('#vw-next').classList.toggle('hidden', single);
+  const strip=$('#vw-strip');
+  strip.querySelectorAll('.vw-thumb').forEach((t,ix)=> t.classList.toggle('active', ix===V.idx));
+  strip.querySelector('.vw-thumb.active')?.scrollIntoView({inline:'center', block:'nearest', behavior:'smooth'});
+}
+function buildViewerStrip(){
+  const strip=$('#vw-strip'); strip.innerHTML='';
+  V.list.forEach((f, ix)=>{
+    const t=document.createElement('div'); t.className='vw-thumb'+(ix===V.idx?' active':'');
+    const im=document.createElement('img'); im.loading='lazy'; im.decoding='async'; im.src=viewerImgSrc(f);
+    t.appendChild(im);
+    t.onclick=()=>{ if(ix===V.idx) return; const dir = ix>V.idx?1:-1; V.idx=ix; showViewerImage(dir); updateViewerChrome(); };
+    strip.appendChild(t);
+  });
+}
+function prefetchViewerNeighbors(){
+  const n=V.list.length; if(n<2) return;
+  [(V.idx+1)%n, (V.idx-1+n)%n].forEach(ix=>{ const im=new Image(); im.src=viewerImgSrc(V.list[ix]); });
+}
+$('#vw-close').onclick=closeViewer;
+$('#vw-prev').onclick=()=> viewerGo(-1);
+$('#vw-next').onclick=()=> viewerGo(1);
+$('#viewer-scrim').onclick=closeViewer;
+$('#viewer').addEventListener('click', e=>{ if(e.target.id==='viewer'||e.target.id==='vw-stage') closeViewer(); });
+let vwWheelAt=0;
+$('#vw-stage').addEventListener('wheel', e=>{
+  e.preventDefault();
+  const now=Date.now(); if(now-vwWheelAt<380) return; vwWheelAt=now;
+  viewerGo((e.deltaY>0||e.deltaX>0)?1:-1);
+}, {passive:false});
 
 function wireCard(el, f, openFn){
   el.querySelector('.check').onclick = e=>{ e.stopPropagation(); toggleSelect(f.id, el); };
@@ -2425,6 +2661,16 @@ $('#clip-cancel').onclick=()=> cancelClipboard();
 /* ================= KEYS ================= */
 function isTyping(){ const t=document.activeElement?.tagName; return t==='INPUT'||t==='TEXTAREA'; }
 addEventListener('keydown', e=>{
+  /* the image viewer is a self-contained immersive surface above everything
+     else — while it's open it owns the keyboard entirely (arrows navigate,
+     Esc closes) and swallows every other shortcut so nothing acts on the
+     gallery behind it. */
+  if($('#viewer').classList.contains('show')){
+    if(e.key==='Escape') return closeViewer();
+    if(e.key==='ArrowLeft'){ e.preventDefault(); return viewerGo(-1); }
+    if(e.key==='ArrowRight'){ e.preventDefault(); return viewerGo(1); }
+    return;
+  }
   const modalOpen=$('#modal-scrim').classList.contains('show');
   if((e.ctrlKey||e.metaKey) && ['k','p'].includes(e.key.toLowerCase())){ e.preventDefault(); togglePalette(); return; }
   if(e.key==='Escape'){
