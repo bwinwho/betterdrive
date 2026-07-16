@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, screen, nativeImage } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -190,6 +190,21 @@ ipcMain.handle('fs:fileIcon', async (e, targetPath) => {
   try {
     const img = await app.getFileIcon(targetPath, { size: 'normal' });
     return img.toDataURL();
+  } catch (err) { return null; }
+});
+
+/* real, actually-downscaled thumbnails for the Pictures grid — this is what
+   fixes the scroll stutter that loading the full-resolution original into a
+   tiny <img> caused (decoding a 4000x3000 photo just to shrink it 15x with
+   CSS is real, wasted decode+memory work, repeated for every visible card).
+   nativeImage.createThumbnailFromPath hands the resize off to the OS's own
+   thumbnail provider — the same one Explorer already uses, often warm in its
+   cache — so this needs no image-processing library or compiled addon. */
+ipcMain.handle('fs:thumbnail', async (e, targetPath, size) => {
+  try {
+    const px = size || 320;
+    const thumb = await nativeImage.createThumbnailFromPath(targetPath, { width: px, height: px });
+    return thumb.isEmpty() ? null : thumb.toDataURL();
   } catch (err) { return null; }
 });
 

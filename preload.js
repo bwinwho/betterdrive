@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('localFS', {
   root: () => ipcRenderer.invoke('fs:root'),
   specialFolders: () => ipcRenderer.invoke('fs:specialFolders'),
   fileIcon: (targetPath) => ipcRenderer.invoke('fs:fileIcon', targetPath),
+  thumbnail: (targetPath, size) => ipcRenderer.invoke('fs:thumbnail', targetPath, size),
   recentFiles: () => ipcRenderer.invoke('fs:recentFiles'),
   extractZip: (zipPath) => ipcRenderer.invoke('fs:extractZip', zipPath),
   zip: (paths, destDir) => ipcRenderer.invoke('fs:zip', paths, destDir),

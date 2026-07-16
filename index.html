@@ -1627,25 +1627,60 @@ function observeNativeIcon(el, f){
      boundaries means a normal scroll never crosses both at once, so nothing
      flickers. This is the "release image memory when it leaves the viewport"
      behaviour without the risk of full DOM windowing in a single-file app. */
+/* small, capped in-renderer cache of already-generated thumbnail data URLs,
+   keyed by file path — so scrolling a card back into view after freeThumb()
+   released it reuses the tiny cached thumbnail instantly instead of paying
+   for another native-thumbnail IPC round-trip. This holds small strings, not
+   decoded bitmaps, so it's cheap to keep far more entries than are ever
+   simultaneously on screen. */
+const thumbCache = new Map();
+const THUMB_CACHE_MAX = 400;
+function cacheThumb(path, dataUrl){
+  thumbCache.delete(path); thumbCache.set(path, dataUrl);
+  if(thumbCache.size > THUMB_CACHE_MAX) thumbCache.delete(thumbCache.keys().next().value);
+}
+/* wrapped so a missing/failing thumbnail IPC (older/partial preload surface,
+   or the main-process call itself rejecting) always resolves to null rather
+   than throwing — callers can then fall back to the full-res file uniformly. */
+function getThumbnail(path, size){
+  try{ return Promise.resolve(window.localFS.thumbnail(path, size)).catch(()=>null); }
+  catch(e){ return Promise.resolve(null); }
+}
 let loadObs=null, freeObs=null;
 function loadThumb(el){
   const img = el.querySelector('.lthumb-wrap img');
-  if(!img || img.dataset.src) return;           // already loading/loaded
-  const src = toFileUrl(el.dataset.id);
-  img.dataset.src = src;
-  const reveal = ()=>{ if(img.dataset.src===src) img.classList.add('loaded'); };
-  img.onerror = ()=> el.querySelector('.lthumb-wrap')?.remove();
-  img.src = src;
-  /* decode off the main thread where supported, so a big JPEG doesn't stall
-     scrolling on the frame it first paints; fall back to onload otherwise. */
-  if(img.decode) img.decode().then(reveal).catch(reveal); else img.onload = reveal;
+  if(!img || img.dataset.path) return;           // already loading/loaded
+  const path = el.dataset.id;
+  img.dataset.path = path;
+  const reveal = ()=>{ if(img.dataset.path===path) img.classList.add('loaded'); };
+  const applySrc = (src)=>{
+    if(img.dataset.path!==path) return;          // freed or reused before this landed
+    img.onerror = ()=> el.querySelector('.lthumb-wrap')?.remove();
+    img.src = src;
+    /* decode off the main thread where supported, so a big image doesn't
+       stall scrolling on the frame it first paints; fall back to onload. */
+    if(img.decode) img.decode().then(reveal).catch(reveal); else img.onload = reveal;
+  };
+  const cached = thumbCache.get(path);
+  if(cached) return applySrc(cached);
+  /* a real, actually-downscaled thumbnail (main.js's fs:thumbnail, via
+     Electron's nativeImage.createThumbnailFromPath — the same OS thumbnail
+     provider Explorer itself uses) instead of loading the full-resolution
+     original into a small box. Decoding a multi-megapixel photo just to
+     shrink it 90% with CSS was the real cause of scroll stutter in
+     image-heavy folders, not just a "little glitch." Falls back to the raw
+     file if thumbnail generation fails for any reason. */
+  getThumbnail(path, 320).then(dataUrl=>{
+    if(dataUrl) cacheThumb(path, dataUrl);
+    applySrc(dataUrl || toFileUrl(path));
+  });
 }
 function freeThumb(el){
   const img = el.querySelector('.lthumb-wrap img');
-  if(!img || !img.dataset.src) return;
+  if(!img || !img.dataset.path) return;
   img.classList.remove('loaded');
   img.removeAttribute('src');
-  delete img.dataset.src;
+  delete img.dataset.path;
 }
 function observeThumb(el){
   if(!loadObs){
@@ -1767,11 +1802,21 @@ function updateViewerChrome(){
   strip.querySelectorAll('.vw-thumb').forEach((t,ix)=> t.classList.toggle('active', ix===V.idx));
   strip.querySelector('.vw-thumb.active')?.scrollIntoView({inline:'center', block:'nearest', behavior:'smooth'});
 }
+/* the nav strip's thumbs are tiny (74x54) — same "don't decode the full
+   original for a small box" fix as the grid, reusing its thumbCache since
+   these are very often the exact same photos already warm in it. */
+function stripThumbSrc(f){
+  if(!f._local) return Promise.resolve(f.thumbnailLink ? f.thumbnailLink.replace(/=s\d+/,'=s150') : '');
+  const cached = thumbCache.get(f.id);
+  if(cached) return Promise.resolve(cached);
+  return getThumbnail(f.id, 160).then(d=>{ if(d) cacheThumb(f.id, d); return d || toFileUrl(f.id); });
+}
 function buildViewerStrip(){
   const strip=$('#vw-strip'); strip.innerHTML='';
   V.list.forEach((f, ix)=>{
     const t=document.createElement('div'); t.className='vw-thumb'+(ix===V.idx?' active':'');
-    const im=document.createElement('img'); im.loading='lazy'; im.decoding='async'; im.src=viewerImgSrc(f);
+    const im=document.createElement('img'); im.loading='lazy'; im.decoding='async';
+    stripThumbSrc(f).then(src=>{ im.src=src; });
     t.appendChild(im);
     t.onclick=()=>{ if(ix===V.idx) return; const dir = ix>V.idx?1:-1; V.idx=ix; showViewerImage(dir); updateViewerChrome(); };
     strip.appendChild(t);
