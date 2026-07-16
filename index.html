@@ -706,6 +706,10 @@ body.electron .wordmark{display:none}
   opacity:0;pointer-events:none;transition:opacity .3s var(--ease);
 }
 #viewer.show{opacity:1;pointer-events:auto}
+/* the custom Electron titlebar (min/max/close) is z-index 100, above the
+   viewer — start the viewer below it so its own ESC/count controls (and the
+   image) never hide behind, or collide with, the window buttons. */
+body.electron #viewer{top:38px}
 /* grid place-items:center stacks the outgoing + incoming image in one cell,
    both centred, so the slide transforms play on top of a stable centre
    instead of fighting a layout-based centring. */
@@ -1634,17 +1638,37 @@ function observeNativeIcon(el, f){
    decoded bitmaps, so it's cheap to keep far more entries than are ever
    simultaneously on screen. */
 const thumbCache = new Map();
-const THUMB_CACHE_MAX = 400;
+const THUMB_CACHE_MAX = 600;
 function cacheThumb(path, dataUrl){
   thumbCache.delete(path); thumbCache.set(path, dataUrl);
   if(thumbCache.size > THUMB_CACHE_MAX) thumbCache.delete(thumbCache.keys().next().value);
 }
+/* thumbnail pixel target, scaled up on HiDPI so gallery cards read crisp
+   rather than soft/pixelated (320 was too small for the big edge-to-edge
+   cards, especially at 2x). Capped so it never balloons toward full-res. */
+const THUMB_PX = Math.min(768, Math.round(512 * (window.devicePixelRatio || 1)));
 /* wrapped so a missing/failing thumbnail IPC (older/partial preload surface,
    or the main-process call itself rejecting) always resolves to null rather
    than throwing — callers can then fall back to the full-res file uniformly. */
 function getThumbnail(path, size){
   try{ return Promise.resolve(window.localFS.thumbnail(path, size)).catch(()=>null); }
   catch(e){ return Promise.resolve(null); }
+}
+/* bounded-concurrency queue for native-thumbnail generation. Firing an IPC
+   thumbnail() call for every card that crosses the (generous) load margin at
+   once floods the main process — dozens of parallel OS thumbnail jobs make
+   the whole app feel sluggish and stutter the very scroll that triggered
+   them, and delay first paint. Capping to a few in flight lets the card
+   rectangles + shimmer show INSTANTLY and the real photos stream in behind
+   them; a slow or huge one just keeps shimmering without holding up its
+   neighbours or the scroll. This is exactly the "let the rectangles load,
+   let big images take their time" behaviour. */
+const thumbQueue = []; let thumbActive = 0; const THUMB_CONCURRENCY = 4;
+function pumpThumbs(){
+  while(thumbActive < THUMB_CONCURRENCY && thumbQueue.length){
+    const job = thumbQueue.shift(); thumbActive++;
+    Promise.resolve().then(job).catch(()=>{}).finally(()=>{ thumbActive--; pumpThumbs(); });
+  }
 }
 let loadObs=null, freeObs=null;
 function loadThumb(el){
@@ -1666,14 +1690,17 @@ function loadThumb(el){
   /* a real, actually-downscaled thumbnail (main.js's fs:thumbnail, via
      Electron's nativeImage.createThumbnailFromPath — the same OS thumbnail
      provider Explorer itself uses) instead of loading the full-resolution
-     original into a small box. Decoding a multi-megapixel photo just to
-     shrink it 90% with CSS was the real cause of scroll stutter in
-     image-heavy folders, not just a "little glitch." Falls back to the raw
-     file if thumbnail generation fails for any reason. */
-  getThumbnail(path, 320).then(dataUrl=>{
-    if(dataUrl) cacheThumb(path, dataUrl);
-    applySrc(dataUrl || toFileUrl(path));
+     original into a small box. Queued so a folder of hundreds doesn't fire
+     hundreds of IPC calls at once. Falls back to the raw file if generation
+     fails for any reason. */
+  thumbQueue.push(()=>{
+    if(img.dataset.path!==path) return;          // scrolled away before its turn — skip the IPC entirely
+    return getThumbnail(path, THUMB_PX).then(dataUrl=>{
+      if(dataUrl) cacheThumb(path, dataUrl);
+      applySrc(dataUrl || toFileUrl(path));
+    });
   });
+  pumpThumbs();
 }
 function freeThumb(el){
   const img = el.querySelector('.lthumb-wrap img');
@@ -1766,10 +1793,31 @@ function showViewerImage(dir){
   img.className='vw-img blur enter';
   img.style.setProperty('--dir', dir>=0?1:-1);
   img.decoding='async';
-  const reveal = ()=> img.classList.add('ready');
-  img.onerror = reveal;
-  img.src = viewerImgSrc(f);
-  if(img.decode) img.decode().then(reveal).catch(reveal); else img.onload = reveal;
+  const full = viewerImgSrc(f);
+  const cached = f._local ? thumbCache.get(f.id) : null;
+  /* progressive: if we already have this photo's small thumbnail warm from
+     the gallery, show it instantly (blurred, upscaled — a real LQIP) so the
+     viewer never sits blank while a multi-megapixel original decodes, then
+     swap to the crisp full-res and un-blur the moment IT has decoded. The
+     isConnected guard drops a late full-res load if the user already
+     navigated away (this <img> was removed). */
+  const upgradeToFull = ()=>{
+    const hi = new Image();
+    const done = ()=>{ if(img.isConnected){ img.src = full; img.classList.add('ready'); } };
+    hi.onerror = ()=>{ if(img.isConnected) img.classList.add('ready'); };
+    hi.src = full;
+    if(hi.decode) hi.decode().then(done).catch(()=>{ if(img.isConnected) img.classList.add('ready'); });
+    else hi.onload = done;
+  };
+  if(cached){
+    img.src = cached;      // instant blurred placeholder — stays blurred until full-res lands
+    upgradeToFull();
+  } else {
+    const reveal = ()=> img.classList.add('ready');
+    img.onerror = reveal;
+    img.src = full;
+    if(img.decode) img.decode().then(reveal).catch(reveal); else img.onload = reveal;
+  }
   stage.appendChild(img);
   /* two rAFs: append at the enter offset, let the browser paint that frame,
      then flip to settled so the transition actually runs (a single frame
@@ -1809,7 +1857,12 @@ function stripThumbSrc(f){
   if(!f._local) return Promise.resolve(f.thumbnailLink ? f.thumbnailLink.replace(/=s\d+/,'=s150') : '');
   const cached = thumbCache.get(f.id);
   if(cached) return Promise.resolve(cached);
-  return getThumbnail(f.id, 160).then(d=>{ if(d) cacheThumb(f.id, d); return d || toFileUrl(f.id); });
+  /* queued alongside the grid's requests so opening a big gallery's strip
+     doesn't fire a burst of its own IPC calls on top of everything else. */
+  return new Promise(resolve=>{
+    thumbQueue.push(()=> getThumbnail(f.id, 200).then(d=>{ if(d) cacheThumb(f.id, d); resolve(d || toFileUrl(f.id)); }));
+    pumpThumbs();
+  });
 }
 function buildViewerStrip(){
   const strip=$('#vw-strip'); strip.innerHTML='';
