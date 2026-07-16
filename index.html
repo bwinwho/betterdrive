@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0A0A09">
+<meta name="theme-color" content="#0A0A09" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F5F1E6" media="(prefers-color-scheme: light)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -12,12 +13,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BetterDrive">
 <title>BetterDrive</title>
-<style>html,body{background:#0A0A09}</style>
+<style>html,body{background:#0A0A09}@media(prefers-color-scheme:light){html,body{background:#F5F1E6}}</style>
 <!-- the render-blocking Google Fonts stylesheet below can take a real amount of
      time on a slow/flaky connection — first paint must not wait on it, or the
      window flashes Chromium's default white background before this document's
-     own CSS ever applies. The inline rule above guarantees a dark first paint
-     regardless of when (or whether) the fonts finish loading. -->
+     own CSS ever applies. The inline rule above guarantees a same-theme first
+     paint (dark or light, matching Windows' setting) regardless of when
+     (or whether) the fonts finish loading. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -29,17 +31,84 @@
   --card-hi:#1C1C19;
   --cream:#EAE4D6;
   --dim:#8E887B;
-  --faint:rgba(234,228,214,.07);
-  --faint-2:rgba(234,228,214,.13);
-  --glow:rgba(246,242,230,.5);
+  --faint:rgba(var(--ink-rgb),.07);
+  --faint-2:rgba(var(--ink-rgb),.13);
+  --glow:rgba(var(--glow-rgb),.5);
   --danger:#C96F5E;
   --vault:#7a4aa5;
+  /* RGB-triplet tokens (no rgba() wrapper) so the ~80 hardcoded translucent
+     colors scattered through this stylesheet can flip with the theme by
+     swapping one variable instead of hand-authoring a light equivalent for
+     every individual alpha value. --ink-rgb/--glow-rgb are the two "text/
+     glow" tints (cream + the slightly-brighter warm-white used specifically
+     for bloom text-shadows); --surface-rgb is the translucent panel/scrim
+     tint and deliberately equals --bg's own RGB in both themes. */
+  --ink-rgb:234,228,214;
+  --glow-rgb:246,242,230;
+  --surface-rgb:10,10,9;
+  --dim-rgb:142,136,123;
+  --menu-bg:#161614;
+  /* the "solid/filled" button + checked-state chip pairing (e.g. .btn.solid,
+     .card.selected .check) needs its OWN pair of tokens rather than reusing
+     --cream — --cream flips to a dark ink in light mode, but a solid button
+     still needs to be the boldest, highest-contrast element on the page in
+     either theme, with readable text on top of it. Dark mode: light cream
+     fill + near-black text (the brightest thing against the near-black app
+     background). Light mode: the relationship inverts — dark ink fill +
+     near-white text (the boldest thing against the light app background). */
+  --solid-bg:var(--cream);
+  --solid-text:#0c0c0a;
   --serif:'Cormorant Garamond',Georgia,serif;
   --sans:'DM Sans',sans-serif;
   --mono:'DM Mono',monospace;
   --ease:cubic-bezier(.22,.61,.36,1);
   --spring:cubic-bezier(.34,1.56,.64,1);
   --zonebar-h:76px;
+}
+/* ============ LIGHT MODE ============
+   Auto-detected from Windows' own theme via prefers-color-scheme — Electron's
+   nativeTheme.themeSource defaults to 'system' and main.js never overrides
+   it, so this is genuinely automatic with zero main-process/IPC involvement;
+   Chromium re-evaluates this media query live the moment Windows switches.
+   This is a real second palette, not a mechanical color invert: the dark
+   theme's "glow"/bloom text-shadows (pulseGlow, card-hover title glow, the
+   cursor-spotlight radial gradient) exist to look like warm cream text
+   emitting light against near-black — that effect doesn't translate when
+   the text itself becomes dark ink on a light page, so --glow-rgb/--ink-rgb
+   resolve to a dark tone here instead of a light one, which degrades a
+   "glow" into a barely-visible soft shadow rather than an inverted (and
+   wrong-looking) bright halo around dark text.
+   Deliberately NOT re-themed here, on purpose:
+     - The full-screen image viewer (#viewer/.vw-*) and every image-cover
+       photo caption/scrim — every mainstream photo viewer (Photos, Google
+       Photos, Lightroom) stays dark regardless of OS theme, since it's
+       viewing arbitrary-brightness photo content, not app chrome.
+     - Every full-screen dimming scrim (#modal-scrim, #palette-scrim,
+       #pcbrowse-scrim, #hideout-scrim, #viewer-scrim, #dropzone) — a scrim's
+       job is to dim what's behind it so a floating panel reads as the
+       foreground; a light-mode "scrim" at the same low opacity wouldn't
+       dim anything, so these intentionally stay dark-translucent in both
+       themes, same as most design systems (Google/Apple included).
+     - KIND_TINT/COLOR_TAGS (JS constants, not CSS) — deliberately muted
+       accent colors, verified separately to still read against a light
+       card rather than mechanically flipped. */
+@media(prefers-color-scheme:light){
+  :root{
+    --bg:#F5F1E6;
+    --card:#FCFAF3;
+    --card-hi:#FFFFFF;
+    --cream:#2A2621;
+    --dim:#7A7263;
+    --danger:#B85844;
+    --vault:#6b3f92;
+    --ink-rgb:42,38,33;
+    --glow-rgb:42,38,33;
+    --surface-rgb:245,241,230;
+    --menu-bg:#FFFFFF;
+    --dim-rgb:122,114,99;
+    --solid-bg:#2A2621;
+    --solid-text:#F5F1E6;
+  }
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scrollbar-width:none}
@@ -55,19 +124,19 @@ body{
 /* ambient vignette + grain */
 body::before{
   content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(120% 90% at 50% 0%,rgba(234,228,214,.035),transparent 55%),
-             radial-gradient(100% 60% at 50% 110%,rgba(234,228,214,.03),transparent 60%);
+  background:radial-gradient(120% 90% at 50% 0%,rgba(var(--ink-rgb),.035),transparent 55%),
+             radial-gradient(100% 60% at 50% 110%,rgba(var(--ink-rgb),.03),transparent 60%);
 }
 body::after{
   content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.05;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
 }
-::selection{background:rgba(234,228,214,.2)}
+::selection{background:rgba(var(--ink-rgb),.2)}
 ::-webkit-scrollbar{display:none;width:0;height:0}
 button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer}
 input{font-family:inherit;color:inherit}
 :focus{outline:none}
-:focus-visible{outline:1px solid rgba(234,228,214,.5);outline-offset:3px}
+:focus-visible{outline:1px solid rgba(var(--ink-rgb),.5);outline-offset:3px}
 .mono{font-family:var(--mono)}
 .hidden{display:none!important}
 
@@ -75,7 +144,7 @@ input{font-family:inherit;color:inherit}
 @keyframes riseCenterX{from{opacity:0;transform:translateX(-50%) translateY(14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideInR{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
-@keyframes pulseGlow{0%,100%{text-shadow:0 0 18px rgba(246,242,230,.35)}50%{text-shadow:0 0 30px rgba(246,242,230,.6)}}
+@keyframes pulseGlow{0%,100%{text-shadow:0 0 18px rgba(var(--glow-rgb),.35)}50%{text-shadow:0 0 30px rgba(var(--glow-rgb),.6)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 
 /* ============ AUTH / SETUP SCREENS ============ */
@@ -87,7 +156,7 @@ input{font-family:inherit;color:inherit}
 .gate .star{font-size:22px;color:var(--dim);margin-bottom:28px;animation:pulseGlow 4s ease-in-out infinite}
 .gate h1{
   font-family:var(--serif);font-weight:500;font-size:clamp(44px,8vw,84px);
-  line-height:.95;letter-spacing:.01em;text-shadow:0 0 40px rgba(246,242,230,.18);
+  line-height:.95;letter-spacing:.01em;text-shadow:0 0 40px rgba(var(--glow-rgb),.18);
 }
 .gate h1 em{font-style:italic}
 .gate .sub{font-family:var(--mono);font-size:11px;letter-spacing:.28em;color:var(--dim);text-transform:uppercase;margin-top:22px}
@@ -95,11 +164,11 @@ input{font-family:inherit;color:inherit}
 .btn{
   font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;
   padding:16px 34px;border:1px solid var(--faint-2);border-radius:2px;color:var(--cream);
-  transition:all .35s var(--ease);background:rgba(234,228,214,.02);
+  transition:all .35s var(--ease);background:rgba(var(--ink-rgb),.02);
 }
-.btn:hover{background:rgba(234,228,214,.08);border-color:rgba(234,228,214,.3);box-shadow:0 0 30px rgba(246,242,230,.08)}
-.btn.solid{background:var(--cream);color:#0c0c0a;border-color:var(--cream);font-weight:500}
-.btn.solid:hover{box-shadow:0 0 40px rgba(246,242,230,.25)}
+.btn:hover{background:rgba(var(--ink-rgb),.08);border-color:rgba(var(--ink-rgb),.3);box-shadow:0 0 30px rgba(var(--glow-rgb),.08)}
+.btn.solid{background:var(--solid-bg);color:var(--solid-text);border-color:var(--solid-bg);font-weight:500}
+.btn.solid:hover{box-shadow:0 0 40px rgba(var(--glow-rgb),.25)}
 .btn.danger{color:var(--danger);border-color:rgba(201,111,94,.35)}
 .btn.danger:hover{background:rgba(201,111,94,.1)}
 .btn:disabled{opacity:.4;pointer-events:none}
@@ -108,22 +177,22 @@ input{font-family:inherit;color:inherit}
 
 /* setup form */
 .setup-box{margin-top:44px;width:min(560px,100%);text-align:left;animation:rise .7s var(--ease) both}
-.setup-steps{border:1px solid var(--faint);border-radius:3px;padding:26px 28px;background:rgba(234,228,214,.015);margin-bottom:26px}
+.setup-steps{border:1px solid var(--faint);border-radius:3px;padding:26px 28px;background:rgba(var(--ink-rgb),.015);margin-bottom:26px}
 .setup-steps h3{font-family:var(--mono);font-size:10px;letter-spacing:.25em;color:var(--dim);text-transform:uppercase;margin-bottom:16px}
 .setup-steps ol{padding-left:18px;display:flex;flex-direction:column;gap:10px}
-.setup-steps li{font-size:13.5px;line-height:1.65;color:rgba(234,228,214,.8)}
+.setup-steps li{font-size:13.5px;line-height:1.65;color:rgba(var(--ink-rgb),.8)}
 .setup-steps li b{font-weight:500;color:var(--cream)}
-.setup-steps code{font-family:var(--mono);font-size:11.5px;background:rgba(234,228,214,.07);padding:2px 7px;border-radius:2px}
-.setup-steps a{color:var(--cream);text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(234,228,214,.3)}
+.setup-steps code{font-family:var(--mono);font-size:11.5px;background:rgba(var(--ink-rgb),.07);padding:2px 7px;border-radius:2px}
+.setup-steps a{color:var(--cream);text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(var(--ink-rgb),.3)}
 .field{margin-bottom:18px}
 .field label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--dim);margin-bottom:9px}
 .field input{
-  width:100%;background:rgba(234,228,214,.03);border:1px solid var(--faint-2);border-radius:2px;
+  width:100%;background:rgba(var(--ink-rgb),.03);border:1px solid var(--faint-2);border-radius:2px;
   padding:15px 16px;font-family:var(--mono);font-size:13px;color:var(--cream);
   transition:border-color .3s var(--ease);
 }
-.field input:focus{border-color:rgba(234,228,214,.4)}
-.field input::placeholder{color:rgba(142,136,123,.5)}
+.field input:focus{border-color:rgba(var(--ink-rgb),.4)}
+.field input::placeholder{color:rgba(var(--dim-rgb),.5)}
 
 /* ============ APP SHELL ============ */
 /* #app wraps #zonebar/#bottom-scrim/#selectbar/#clipbar, all position:fixed —
@@ -140,7 +209,7 @@ input{font-family:inherit;color:inherit}
   position:sticky;top:0;z-index:40;
   display:flex;align-items:center;gap:22px;
   padding:20px clamp(20px,4vw,56px);
-  background:linear-gradient(to bottom,rgba(10,10,9,.92),rgba(10,10,9,.75) 70%,transparent);
+  background:linear-gradient(to bottom,rgba(var(--surface-rgb),.92),rgba(var(--surface-rgb),.75) 70%,transparent);
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
 .wordmark{font-family:var(--mono);font-size:12px;letter-spacing:.3em;text-transform:uppercase;white-space:nowrap;display:flex;align-items:center;gap:10px;color:var(--cream)}
@@ -150,12 +219,12 @@ input{font-family:inherit;color:inherit}
 .searchwrap{flex:1;max-width:460px;position:relative}
 .searchwrap svg{position:absolute;left:15px;top:50%;transform:translateY(-50%);opacity:.4;pointer-events:none}
 #search{
-  width:100%;background:rgba(234,228,214,.04);border:1px solid var(--faint);
+  width:100%;background:rgba(var(--ink-rgb),.04);border:1px solid var(--faint);
   border-radius:3px;padding:12px 40px 12px 42px;font-size:13.5px;font-weight:300;
   color:var(--cream);transition:all .35s var(--ease);
 }
-#search:focus{border-color:rgba(234,228,214,.3);background:rgba(234,228,214,.06);box-shadow:0 0 24px rgba(246,242,230,.06)}
-#search::placeholder{color:rgba(142,136,123,.6)}
+#search:focus{border-color:rgba(var(--ink-rgb),.3);background:rgba(var(--ink-rgb),.06);box-shadow:0 0 24px rgba(var(--glow-rgb),.06)}
+#search::placeholder{color:rgba(var(--dim-rgb),.6)}
 #search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);padding:6px 9px;color:var(--dim);font-family:var(--mono);font-size:11px}
 #search-clear:hover{color:var(--cream)}
 .pc-badge{
@@ -171,7 +240,7 @@ input{font-family:inherit;color:inherit}
 .search-scan.active{opacity:1}
 .search-scan::after{
   content:'';position:absolute;top:0;bottom:0;width:40%;
-  background:linear-gradient(90deg,transparent,rgba(234,228,214,.75),transparent);
+  background:linear-gradient(90deg,transparent,rgba(var(--ink-rgb),.75),transparent);
   animation:scanSweep 1.15s ease-in-out infinite;
 }
 @keyframes scanSweep{0%{left:-40%}100%{left:100%}}
@@ -185,7 +254,7 @@ input{font-family:inherit;color:inherit}
 .sortbtn:hover{color:var(--cream);border-color:var(--faint)}
 .menu{
   position:absolute;top:calc(100% + 6px);right:0;min-width:190px;
-  background:#161614;border:1px solid var(--faint-2);border-radius:3px;
+  background:var(--menu-bg);border:1px solid var(--faint-2);border-radius:3px;
   padding:7px;z-index:60;box-shadow:0 20px 50px rgba(0,0,0,.6);
   animation:rise .25s var(--ease) both;
 }
@@ -194,7 +263,7 @@ input{font-family:inherit;color:inherit}
   font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
   color:var(--dim);transition:all .2s var(--ease);justify-content:space-between;align-items:center;gap:14px;
 }
-.menu button:hover{background:rgba(234,228,214,.06);color:var(--cream)}
+.menu button:hover{background:rgba(var(--ink-rgb),.06);color:var(--cream)}
 .menu button.active{color:var(--cream)}
 .menu button.danger{color:var(--danger)}
 .menu hr{border:none;border-top:1px solid var(--faint);margin:6px 4px}
@@ -209,11 +278,11 @@ input{font-family:inherit;color:inherit}
   border:1px solid rgba(255,255,255,.15);transition:transform .15s var(--ease),box-shadow .15s var(--ease);
 }
 .menu-swatches .swatch:hover{transform:scale(1.18)}
-.menu-swatches .swatch.active{box-shadow:0 0 0 2px #161614,0 0 0 3.5px var(--sw)}
+.menu-swatches .swatch.active{box-shadow:0 0 0 2px var(--menu-bg),0 0 0 3.5px var(--sw)}
 .menu-swatches .swatch.clear{background:transparent;border:1px dashed var(--faint-2);position:relative}
 .menu-swatches .swatch.clear::after{content:'';position:absolute;left:3px;right:3px;top:50%;height:1px;background:var(--dim);transform:rotate(45deg)}
 .avatar{width:34px;height:34px;border-radius:50%;border:1px solid var(--faint-2);object-fit:cover;cursor:pointer;transition:all .3s var(--ease)}
-.avatar:hover{border-color:rgba(234,228,214,.4);box-shadow:0 0 20px rgba(246,242,230,.12)}
+.avatar:hover{border-color:rgba(var(--ink-rgb),.4);box-shadow:0 0 20px rgba(var(--glow-rgb),.12)}
 
 /* context row */
 .context{
@@ -226,14 +295,14 @@ input{font-family:inherit;color:inherit}
   font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;
 }
 #crumb .dimpart{color:var(--dim)}
-#crumb .glow{text-shadow:0 0 14px rgba(246,242,230,.3)}
+#crumb .glow{text-shadow:0 0 14px rgba(var(--glow-rgb),.3)}
 .context .meta{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
 .context .spacer{flex:1}
 .iconbtn{
   font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
   padding:10px 16px;border:1px solid var(--faint);border-radius:2px;transition:all .3s var(--ease);white-space:nowrap;
 }
-.iconbtn:hover{color:var(--cream);border-color:var(--faint-2);background:rgba(234,228,214,.04)}
+.iconbtn:hover{color:var(--cream);border-color:var(--faint-2);background:rgba(var(--ink-rgb),.04)}
 
 /* ============ GRID & CARDS ============ */
 #stage{padding:10px clamp(20px,4vw,56px) calc(var(--zonebar-h) + 70px);position:relative;z-index:1}
@@ -247,14 +316,14 @@ input{font-family:inherit;color:inherit}
 .grid-files{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(290px,100%),1fr));gap:14px}
 
 .card{
-  position:relative;background:var(--card);border:1px solid rgba(234,228,214,.17);border-radius:4px;
+  position:relative;background:var(--card);border:1px solid rgba(var(--ink-rgb),.17);border-radius:4px;
   padding:30px 32px;cursor:pointer;overflow:hidden;
   transition:transform .4s var(--ease),background .4s var(--ease),border-color .4s var(--ease),box-shadow .4s var(--ease);
   animation:rise .55s var(--ease) both;animation-delay:calc(var(--i,0)*45ms);
 }
 .card::after{
   content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .35s var(--ease);
-  background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),rgba(246,242,230,.07),transparent 65%);
+  background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),rgba(var(--glow-rgb),.07),transparent 65%);
 }
 /* a whisper of the file's kind colour as a soft shadow — reads at a glance, never shouts */
 .card.file{box-shadow:0 2px 13px -7px color-mix(in srgb, var(--tint, #7a756a) 45%, transparent)}
@@ -268,14 +337,14 @@ input{font-family:inherit;color:inherit}
 .card[data-tag]:hover{border-color:var(--tagcolor)!important;box-shadow:0 18px 44px rgba(0,0,0,.4),0 0 0 1px color-mix(in srgb, var(--tagcolor) 45%, transparent)!important}
 .card[data-tag]::after{background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%), color-mix(in srgb, var(--tagcolor) 18%, transparent), transparent 65%)}
 .card:hover::after{opacity:1}
-.card:hover{background:var(--card-hi);border-color:rgba(234,228,214,.34);transform:translateY(-3px);box-shadow:0 18px 44px rgba(0,0,0,.4)}
+.card:hover{background:var(--card-hi);border-color:rgba(var(--ink-rgb),.34);transform:translateY(-3px);box-shadow:0 18px 44px rgba(0,0,0,.4)}
 .card.kfocus,.result-row.kfocus{
-  border-color:rgba(234,228,214,.55);
-  box-shadow:0 0 0 1px rgba(234,228,214,.3),0 14px 40px rgba(0,0,0,.45);
+  border-color:rgba(var(--ink-rgb),.55);
+  box-shadow:0 0 0 1px rgba(var(--ink-rgb),.3),0 14px 40px rgba(0,0,0,.45);
 }
 .card.kfocus .title{text-shadow:0 0 24px var(--glow)}
 .card:active{transform:translateY(-1px) scale(.995)}
-.card.selected{border-color:rgba(234,228,214,.45);background:var(--card-hi);box-shadow:0 0 0 1px rgba(234,228,214,.25),0 14px 40px rgba(0,0,0,.4)}
+.card.selected{border-color:rgba(var(--ink-rgb),.45);background:var(--card-hi);box-shadow:0 0 0 1px rgba(var(--ink-rgb),.25),0 14px 40px rgba(0,0,0,.4)}
 
 .card .title{
   font-family:var(--serif);font-weight:600;letter-spacing:.005em;word-break:break-word;
@@ -287,31 +356,31 @@ input{font-family:inherit;color:inherit}
 .card.file .title{font-size:20px;font-weight:500;line-height:1.18;-webkit-line-clamp:2;min-height:2.36em}
 /* only the actual text glyphs trigger rename — clicking empty title space opens the item */
 .card .title .ttx{display:inline;cursor:text;transition:text-decoration-color .2s var(--ease);text-decoration:underline transparent;text-underline-offset:3px;text-decoration-thickness:1px}
-.card:hover .title .ttx:hover{text-decoration-color:rgba(234,228,214,.4)}
+.card:hover .title .ttx:hover{text-decoration-color:rgba(var(--ink-rgb),.4)}
 .card .meta{
   font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
   color:var(--dim);margin-top:20px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;
 }
 .card .meta .sep{opacity:.45}
-.card .openlink{color:rgba(234,228,214,.75)}
+.card .openlink{color:rgba(var(--ink-rgb),.75)}
 .card .badge{border:1px solid var(--faint-2);padding:2px 8px;border-radius:2px;font-size:9px}
 
 .card .thumb{
   width:100%;height:140px;border-radius:3px;margin-bottom:18px;object-fit:cover;
-  background:rgba(234,228,214,.04);border:1px solid var(--faint);
+  background:rgba(var(--ink-rgb),.04);border:1px solid var(--faint);
   filter:saturate(.9) contrast(1.02);transition:filter .4s var(--ease);
 }
 .card:hover .thumb{filter:saturate(1.05)}
 .card .lthumb-wrap{
   position:relative;width:100%;height:96px;margin-bottom:16px;border-radius:3px;overflow:hidden;
-  background:rgba(234,228,214,.03);
+  background:rgba(var(--ink-rgb),.03);
 }
 /* shimmer placeholder sits behind the image until it has decoded — :has()
    flips it off the instant the <img> gains .loaded, so an image that's slow
    to decode keeps pulsing instead of showing a dead grey box. */
 .card .lthumb-wrap::before{
   content:'';position:absolute;inset:0;z-index:0;opacity:1;transition:opacity .4s var(--ease);
-  background:linear-gradient(100deg,rgba(234,228,214,.02) 30%,rgba(234,228,214,.07) 50%,rgba(234,228,214,.02) 70%);
+  background:linear-gradient(100deg,rgba(var(--ink-rgb),.02) 30%,rgba(var(--ink-rgb),.07) 50%,rgba(var(--ink-rgb),.02) 70%);
   background-size:200% 100%;animation:shimmer 1.5s linear infinite;
 }
 .card .lthumb-wrap:has(img.loaded)::before{opacity:0}
@@ -339,7 +408,18 @@ input{font-family:inherit;color:inherit}
    inside an image-cover card is absolutely positioned (cover + caption),
    so the card has no intrinsic flow height — without this it would
    collapse to a thin line in any row not shared with a normal card. */
-.card.file.image-cover{padding:0;min-height:200px}
+/* pinned dark-mode text tokens (see the #viewer rule for the full rationale):
+   the caption sits on a hardcoded-dark scrim over an arbitrary-brightness
+   photo, so its text must stay legible against THAT dark scrim regardless
+   of the app's own light/dark theme, instead of tracking --cream/--dim into
+   an unreadable dark-on-dark caption in light mode. */
+/* the explicit color:var(--cream) here is required, not decorative — .title
+   itself declares no color and would otherwise inherit the ALREADY-RESOLVED
+   color from body (fixed at body's own position in the tree), silently
+   bypassing this element's pinned --cream entirely. Re-declaring color here
+   forces a fresh var() resolution at this element, which .title then
+   correctly inherits from. */
+.card.file.image-cover{padding:0;min-height:200px;--cream:#EAE4D6;--dim:#8E887B;color:var(--cream)}
 .card.file.image-cover .lthumb-wrap{position:absolute;inset:0;width:100%;height:100%;margin:0;border-radius:4px}
 .card.file.image-cover .lthumb-wrap::after{
   background:linear-gradient(to top, rgba(6,6,5,.9) 0%, rgba(6,6,5,.35) 32%, transparent 60%),
@@ -373,8 +453,8 @@ input{font-family:inherit;color:inherit}
 .grid-gallery .card.file.image-cover .caption{opacity:0;transform:translateY(6px);transition:opacity .3s var(--ease),transform .3s var(--ease)}
 .grid-gallery .card.file.image-cover:hover .caption{opacity:1;transform:translateY(0)}
 .grid-gallery .card.file.image-cover:hover{
-  transform:translateY(-5px);z-index:3;border-color:rgba(234,228,214,.28);
-  box-shadow:0 24px 54px rgba(0,0,0,.55),0 0 0 1px rgba(234,228,214,.22);
+  transform:translateY(-5px);z-index:3;border-color:rgba(var(--ink-rgb),.28);
+  box-shadow:0 24px 54px rgba(0,0,0,.55),0 0 0 1px rgba(var(--ink-rgb),.22);
 }
 /* the photo itself zooms slightly within the card's clipped bounds — the
    card's overflow:hidden keeps the scaled image from bleeding onto neighbours. */
@@ -388,21 +468,21 @@ input{font-family:inherit;color:inherit}
 
 .card .check{
   position:absolute;top:14px;right:14px;width:24px;height:24px;border-radius:50%;
-  border:1px solid var(--faint-2);background:rgba(10,10,9,.55);display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--faint-2);background:rgba(var(--surface-rgb),.55);display:flex;align-items:center;justify-content:center;
   font-size:11px;color:transparent;opacity:.35;transition:all .25s var(--ease);z-index:3;
 }
 .card:hover .check,body.selectmode .check{opacity:1}
-.card.selected .check{background:var(--cream);color:#0c0c0a;border-color:var(--cream);opacity:1}
+.card.selected .check{background:var(--solid-bg);color:var(--solid-text);border-color:var(--solid-bg);opacity:1}
 .card .fav{
   position:absolute;top:14px;right:46px;width:24px;height:24px;border-radius:50%;
-  border:1px solid var(--faint-2);background:rgba(10,10,9,.55);display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--faint-2);background:rgba(var(--surface-rgb),.55);display:flex;align-items:center;justify-content:center;
   font-size:11px;color:var(--dim);opacity:.35;transition:all .25s var(--ease);z-index:3;
 }
 .card:hover .fav,.card .fav.active{opacity:1}
 .card .fav.active{color:#e8c766;border-color:rgba(232,199,102,.5)}
 .card .lock{
   position:absolute;top:14px;right:78px;width:24px;height:24px;border-radius:50%;
-  border:1px solid var(--faint-2);background:rgba(10,10,9,.55);display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--faint-2);background:rgba(var(--surface-rgb),.55);display:flex;align-items:center;justify-content:center;
   font-size:11px;color:var(--dim);opacity:.35;transition:all .25s var(--ease);z-index:3;
 }
 .card:hover .lock{opacity:1;color:var(--vault)}
@@ -412,44 +492,44 @@ input{font-family:inherit;color:inherit}
   font-size:16px;line-height:1;letter-spacing:2px;opacity:0;transition:all .25s var(--ease);z-index:3;
 }
 .card:hover .more{opacity:1}
-.card .more:hover{color:var(--cream);background:rgba(234,228,214,.07)}
+.card .more:hover{color:var(--cream);background:rgba(var(--ink-rgb),.07)}
 
 
 .card .idx{
   position:absolute;top:14px;left:14px;z-index:3;
   font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--dim);
-  background:rgba(10,10,9,.6);border:1px solid rgba(234,228,214,.14);border-radius:2px;padding:3px 7px;
+  background:rgba(var(--surface-rgb),.6);border:1px solid rgba(var(--ink-rgb),.14);border-radius:2px;padding:3px 7px;
 }
 .znum{font-family:var(--mono);font-size:9px;color:var(--dim);opacity:.55;margin-right:7px;letter-spacing:0}
 .no-anim .card,.no-anim .result-row{animation:none!important}
-.result-row .idx{font-family:var(--mono);font-size:9px;color:var(--dim);border:1px solid rgba(234,228,214,.14);border-radius:2px;padding:3px 7px}
+.result-row .idx{font-family:var(--mono);font-size:9px;color:var(--dim);border:1px solid rgba(var(--ink-rgb),.14);border-radius:2px;padding:3px 7px}
 body:not(.kbrowse) .idx{display:none}
 body.kbrowse .znum{opacity:.18}
 
 .empty{
   padding:90px 20px;text-align:center;color:var(--dim);animation:fadeIn .6s var(--ease) both;
 }
-.empty .big{font-family:var(--serif);font-size:clamp(28px,4vw,42px);font-weight:500;color:rgba(234,228,214,.55);text-transform:uppercase;letter-spacing:.02em}
+.empty .big{font-family:var(--serif);font-size:clamp(28px,4vw,42px);font-weight:500;color:rgba(var(--ink-rgb),.55);text-transform:uppercase;letter-spacing:.02em}
 .empty p{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;margin-top:14px}
 .empty p.cloud-desc{font-family:var(--sans, inherit);font-size:13px;letter-spacing:.01em;text-transform:none;line-height:1.6;max-width:380px;margin:14px auto 0;color:var(--dim)}
 
 /* skeletons */
 .sk-label{height:11px;width:110px;border-radius:2px;background:var(--card);margin:34px 0 18px;position:relative;overflow:hidden}
-.sk-label::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(234,228,214,.06) 50%,transparent 70%);transform:translateX(-100%);animation:shimmer 1.6s infinite}
+.sk-label::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(var(--ink-rgb),.06) 50%,transparent 70%);transform:translateX(-100%);animation:shimmer 1.6s infinite}
 .sk{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--faint);border-radius:4px;height:170px;animation:fadeIn .4s both}
-.sk::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(234,228,214,.05) 50%,transparent 70%);transform:translateX(-100%);animation:shimmer 1.6s infinite}
+.sk::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(var(--ink-rgb),.05) 50%,transparent 70%);transform:translateX(-100%);animation:shimmer 1.6s infinite}
 @keyframes shimmer{to{transform:translateX(100%)}}
 
 #bottom-scrim{
   position:fixed;left:0;right:0;bottom:0;height:140px;z-index:45;pointer-events:none;
-  background:linear-gradient(to top,rgba(10,10,9,.95),rgba(10,10,9,.6) 55%,transparent);
+  background:linear-gradient(to top,rgba(var(--surface-rgb),.95),rgba(var(--surface-rgb),.6) 55%,transparent);
 }
 
 /* ============ ZONE BAR ============ */
 #zonebar{
   position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:50;
   display:flex;align-items:center;justify-content:center;gap:4px;max-width:min(92vw,900px);
-  background:rgba(18,18,16,.68);border:1px solid rgba(234,228,214,.16);border-radius:999px;
+  background:rgba(var(--surface-rgb),.68);border:1px solid rgba(var(--ink-rgb),.16);border-radius:999px;
   padding:9px 12px;backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);
   box-shadow:0 28px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
   overflow-x:auto;scrollbar-width:none;animation:riseCenterX .7s var(--ease) .2s both;
@@ -462,8 +542,8 @@ body.kbrowse .znum{opacity:.18}
 }
 .zone-tab:hover{color:var(--cream);transform:translateY(-2px) scale(1.05)}
 .zone-tab.active{
-  color:var(--cream);background:rgba(234,228,214,.07);
-  text-shadow:0 0 16px rgba(246,242,230,.5);animation:pulseGlow 3.5s ease-in-out infinite;
+  color:var(--cream);background:rgba(var(--ink-rgb),.07);
+  text-shadow:0 0 16px rgba(var(--glow-rgb),.5);animation:pulseGlow 3.5s ease-in-out infinite;
 }
 .zone-add{font-family:var(--serif);font-size:21px;color:var(--dim);padding:8px 16px;border-radius:999px;transition:all .3s var(--ease)}
 .zone-add:hover{color:var(--cream);text-shadow:0 0 14px var(--glow)}
@@ -472,7 +552,7 @@ body.kbrowse .znum{opacity:.18}
 #selectbar{
   position:fixed;bottom:calc(var(--zonebar-h) + 34px);left:50%;transform:translateX(-50%) translateY(20px);
   z-index:49;display:flex;align-items:center;gap:6px;opacity:0;pointer-events:none;
-  background:rgba(20,20,18,.85);border:1px solid var(--faint-2);border-radius:5px;padding:7px 9px;
+  background:rgba(var(--surface-rgb),.85);border:1px solid var(--faint-2);border-radius:5px;padding:7px 9px;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 18px 50px rgba(0,0,0,.5);
   transition:all .35s var(--ease);
 }
@@ -482,7 +562,7 @@ body.kbrowse .znum{opacity:.18}
   font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);
   padding:10px 14px;border-radius:3px;transition:all .25s var(--ease);
 }
-#selectbar button:hover{color:var(--cream);background:rgba(234,228,214,.07)}
+#selectbar button:hover{color:var(--cream);background:rgba(var(--ink-rgb),.07)}
 #selectbar button.danger:hover{color:var(--danger);background:rgba(201,111,94,.1)}
 
 /* clipboard bar — replaces the selection bar once Cut/Copy is chosen, so the
@@ -492,7 +572,7 @@ body.kbrowse .znum{opacity:.18}
 #clipbar{
   position:fixed;bottom:calc(var(--zonebar-h) + 34px);left:50%;transform:translateX(-50%) translateY(20px);
   z-index:49;display:flex;align-items:center;gap:6px;opacity:0;pointer-events:none;
-  background:rgba(20,20,18,.9);border:1px solid rgba(232,199,102,.35);border-radius:5px;padding:7px 9px;
+  background:rgba(var(--surface-rgb),.9);border:1px solid rgba(232,199,102,.35);border-radius:5px;padding:7px 9px;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 18px 50px rgba(0,0,0,.5);
   transition:all .35s var(--ease);
 }
@@ -502,7 +582,7 @@ body.kbrowse .znum{opacity:.18}
   font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);
   padding:10px 14px;border-radius:3px;transition:all .25s var(--ease);
 }
-#clipbar button:hover{color:var(--cream);background:rgba(234,228,214,.07)}
+#clipbar button:hover{color:var(--cream);background:rgba(var(--ink-rgb),.07)}
 #clipbar button.solid{color:#0c0c0a;background:rgba(232,199,102,.9);font-weight:500}
 #clipbar button.solid:hover{background:#e8c766}
 
@@ -513,7 +593,7 @@ body.kbrowse .znum{opacity:.18}
 #modal-scrim{position:fixed;inset:0;z-index:86;background:rgba(5,5,4,.66);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
 #modal-scrim.show{opacity:1;pointer-events:auto}
 #modal{
-  width:min(440px,100%);background:#151513;border:1px solid var(--faint-2);border-radius:5px;
+  width:min(440px,100%);background:var(--card);border:1px solid var(--faint-2);border-radius:5px;
   padding:30px;transform:translateY(16px);transition:transform .35s var(--ease);box-shadow:0 40px 90px rgba(0,0,0,.6);
 }
 #modal-scrim.show #modal{transform:translateY(0)}
@@ -523,7 +603,7 @@ body.kbrowse .znum{opacity:.18}
 #modal .mrow.center{justify-content:center}
 #modal .mlist{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;margin-top:6px}
 #modal .mlist button{text-align:left;padding:14px 16px;border:1px solid var(--faint);border-radius:3px;font-family:var(--serif);font-size:19px;font-weight:500;text-transform:uppercase;letter-spacing:.02em;color:var(--dim);transition:all .25s var(--ease)}
-#modal .mlist button:hover{color:var(--cream);border-color:var(--faint-2);background:rgba(234,228,214,.04);text-shadow:0 0 16px var(--glow)}
+#modal .mlist button:hover{color:var(--cream);border-color:var(--faint-2);background:rgba(var(--ink-rgb),.04);text-shadow:0 0 16px var(--glow)}
 
 /* ============ TOAST + UPLOADS ============ */
 #toasts{
@@ -537,10 +617,10 @@ body.kbrowse .znum{opacity:.18}
 .toast.err{color:var(--danger)}
 
 #uploads{position:fixed;right:24px;bottom:calc(var(--zonebar-h) + 40px);z-index:60;width:min(330px,86vw);display:flex;flex-direction:column;gap:8px}
-.up-item{background:rgba(20,20,18,.92);border:1px solid var(--faint-2);border-radius:3px;padding:13px 16px;backdrop-filter:blur(16px);animation:rise .35s var(--ease) both}
+.up-item{background:rgba(var(--surface-rgb),.92);border:1px solid var(--faint-2);border-radius:3px;padding:13px 16px;backdrop-filter:blur(16px);animation:rise .35s var(--ease) both}
 .up-item .nm{font-size:12.5px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px}
 .up-item .bar{height:2px;background:var(--faint);border-radius:2px;overflow:hidden}
-.up-item .bar i{display:block;height:100%;background:var(--cream);width:0%;transition:width .3s var(--ease);box-shadow:0 0 12px rgba(246,242,230,.5)}
+.up-item .bar i{display:block;height:100%;background:var(--cream);width:0%;transition:width .3s var(--ease);box-shadow:0 0 12px rgba(var(--glow-rgb),.5)}
 .up-item .bar.indeterminate i{width:40%;transition:none;animation:barSweep 1.1s ease-in-out infinite}
 @keyframes barSweep{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
 .up-item .st{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase;margin-top:7px}
@@ -549,13 +629,25 @@ body.kbrowse .znum{opacity:.18}
 #dropzone{
   position:fixed;inset:0;z-index:75;background:rgba(8,8,7,.82);backdrop-filter:blur(8px);
   display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s var(--ease);
+  /* pinned dark-mode tokens (see the #viewer rule above for the full
+     rationale) — this overlay's own background stays hardcoded dark in
+     both themes like every other full-screen scrim, so its text needs to
+     stay legible against THAT dark backdrop rather than tracking the app's
+     light-mode dark-ink tokens into invisible dark-on-dark text. */
+  --cream:#EAE4D6;
+  --dim:#8E887B;
+  --ink-rgb:234,228,214;
+  --glow-rgb:246,242,230;
 }
 #dropzone.show{opacity:1}
 #dropzone .frame{
-  position:absolute;inset:26px;border:1px dashed rgba(234,228,214,.35);border-radius:8px;
+  position:absolute;inset:26px;border:1px dashed rgba(var(--ink-rgb),.35);border-radius:8px;
 }
 #dropzone .inner{text-align:center}
-#dropzone .inner .big{font-family:var(--serif);font-size:clamp(38px,6vw,64px);font-weight:600;text-transform:uppercase;text-shadow:0 0 40px rgba(246,242,230,.4);animation:pulseGlow 2.4s infinite}
+/* explicit color (not just relying on inheritance) for the same reason as
+   .card.file.image-cover above — this element declares no color of its own
+   otherwise, and would silently inherit body's un-pinned color instead. */
+#dropzone .inner .big{font-family:var(--serif);font-size:clamp(38px,6vw,64px);font-weight:600;text-transform:uppercase;color:var(--cream);text-shadow:0 0 40px rgba(var(--glow-rgb),.4);animation:pulseGlow 2.4s infinite}
 #dropzone .inner .where{font-family:var(--mono);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim);margin-top:18px}
 
 /* ============ COMMAND PALETTE ============ */
@@ -563,7 +655,7 @@ body.kbrowse .znum{opacity:.18}
 #palette-scrim.show{opacity:1;pointer-events:auto}
 #palette{
   position:fixed;top:14vh;left:50%;transform:translateX(-50%) translateY(10px);width:min(580px,92vw);
-  z-index:85;background:rgba(20,20,18,.9);border:1px solid rgba(234,228,214,.2);border-radius:8px;
+  z-index:85;background:rgba(var(--surface-rgb),.9);border:1px solid rgba(var(--ink-rgb),.2);border-radius:8px;
   backdrop-filter:blur(28px) saturate(1.3);box-shadow:0 50px 110px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.05);
   opacity:0;pointer-events:none;transition:all .3s var(--ease);overflow:hidden;
 }
@@ -572,13 +664,13 @@ body.kbrowse .znum{opacity:.18}
   width:100%;background:transparent;border:none;border-bottom:1px solid var(--faint);
   padding:19px 22px;font-family:var(--sans);font-size:15.5px;font-weight:300;color:var(--cream);
 }
-#pal-input::placeholder{color:rgba(142,136,123,.55)}
+#pal-input::placeholder{color:rgba(var(--dim-rgb),.55)}
 #pal-list{max-height:min(46vh,420px);overflow-y:auto;padding:8px}
 .pal-row{
   display:flex;align-items:center;gap:14px;padding:12px 15px;border-radius:4px;cursor:pointer;
   transition:background .15s var(--ease);
 }
-.pal-row:hover,.pal-row.active{background:rgba(234,228,214,.07)}
+.pal-row:hover,.pal-row.active{background:rgba(var(--ink-rgb),.07)}
 .pal-row.active .pal-label{text-shadow:0 0 16px var(--glow)}
 .pal-label{font-family:var(--serif);font-size:17px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pal-hint{font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;color:var(--dim);border:1px solid var(--faint);border-radius:2px;padding:3px 8px;flex-shrink:0}
@@ -589,9 +681,9 @@ body.kbrowse .znum{opacity:.18}
 .help-grid kbd{
   font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--cream);
   border:1px solid var(--faint-2);border-radius:3px;padding:4px 9px;white-space:nowrap;justify-self:start;
-  background:rgba(234,228,214,.04);
+  background:rgba(var(--ink-rgb),.04);
 }
-.help-grid span{font-size:13px;color:rgba(234,228,214,.75);align-self:center}
+.help-grid span{font-size:13px;color:rgba(var(--ink-rgb),.75);align-self:center}
 
 
 .crumb-seg{cursor:pointer;transition:color .2s var(--ease)}
@@ -602,7 +694,7 @@ body.kbrowse .znum{opacity:.18}
 #pcbrowse-scrim.show{opacity:1;pointer-events:auto}
 #pcbrowse{
   position:fixed;top:6vh;left:50%;transform:translateX(-50%) translateY(14px);width:min(680px,92vw);height:min(76vh,720px);
-  z-index:81;background:#141412;border:1px solid var(--faint-2);border-radius:6px;
+  z-index:81;background:var(--card);border:1px solid var(--faint-2);border-radius:6px;
   display:flex;flex-direction:column;opacity:0;pointer-events:none;
   box-shadow:0 50px 100px rgba(0,0,0,.6);transition:all .35s var(--ease);
 }
@@ -615,12 +707,12 @@ body.kbrowse .znum{opacity:.18}
   display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:3px;cursor:pointer;
   transition:background .2s var(--ease);
 }
-.pcb-row:hover{background:rgba(234,228,214,.05)}
+.pcb-row:hover{background:rgba(var(--ink-rgb),.05)}
 .pcb-row .pcb-check{
   width:18px;height:18px;border-radius:4px;border:1px solid var(--faint-2);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .2s var(--ease);
 }
-.pcb-row.checked .pcb-check{background:var(--cream);color:#0c0c0a;border-color:var(--cream)}
+.pcb-row.checked .pcb-check{background:var(--solid-bg);color:var(--solid-text);border-color:var(--solid-bg)}
 .pcb-row .pcb-icon{font-family:var(--mono);font-size:9px;color:var(--dim);border:1px solid var(--faint);border-radius:2px;padding:3px 6px;flex-shrink:0;min-width:34px;text-align:center}
 .pcb-row .pcb-name{flex:1;font-size:13.5px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pcb-row .pcb-meta{font-family:var(--mono);font-size:9.5px;color:var(--dim);letter-spacing:.08em;flex-shrink:0}
@@ -657,7 +749,7 @@ body.kbrowse .znum{opacity:.18}
 #hideout .pcb-foot{padding:18px clamp(20px,4vw,56px)}
 .card .vault-restore,.card .vault-trash{
   position:absolute;top:14px;width:24px;height:24px;border-radius:50%;
-  border:1px solid var(--faint-2);background:rgba(10,10,9,.55);display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--faint-2);background:rgba(var(--surface-rgb),.55);display:flex;align-items:center;justify-content:center;
   font-size:11px;opacity:.35;transition:all .25s var(--ease);z-index:3;
 }
 .card .vault-restore{right:46px;color:var(--dim)}
@@ -674,7 +766,7 @@ body.kbrowse .znum{opacity:.18}
 
 #titlebar{
   display:none; align-items:center; height:38px; -webkit-app-region:drag;
-  background:#0A0A09; border-bottom:1px solid var(--faint); position:fixed; top:0; left:0; right:0; z-index:100;
+  background:var(--bg); border-bottom:1px solid var(--faint); position:fixed; top:0; left:0; right:0; z-index:100;
   padding:0 0 0 14px;
 }
 body.electron #titlebar{display:flex}
@@ -688,7 +780,7 @@ body.electron #app{padding-top:38px}
   -webkit-app-region:no-drag; width:46px; height:38px; display:flex; align-items:center; justify-content:center;
   color:var(--dim); transition:background .2s var(--ease),color .2s var(--ease);
 }
-#titlebar .tb-btn:hover{background:rgba(234,228,214,.08);color:var(--cream)}
+#titlebar .tb-btn:hover{background:rgba(var(--ink-rgb),.08);color:var(--cream)}
 #titlebar .tb-btn.tb-close:hover{background:#C96F5E;color:#0c0c0a}
 #titlebar svg{width:11px;height:11px}
 body.electron .topbar{top:38px}
@@ -705,6 +797,18 @@ body.electron .wordmark{display:none}
 #viewer{
   position:fixed;inset:0;z-index:95;display:flex;flex-direction:column;
   opacity:0;pointer-events:none;transition:opacity .3s var(--ease);
+  /* pin every theme token this subtree uses back to its dark-mode value,
+     regardless of app theme — the viewer's own backdrop (#viewer-scrim)
+     stays hardcoded dark always (see the LIGHT MODE comment in TOKENS), so
+     its overlay text/chips (.vw-close/.vw-count/.vw-info/.vw-nav/.vw-thumb)
+     must stay legible against that dark backdrop too. Without this, a
+     light-mode --cream/--dim resolve to dark ink and render as
+     near-invisible dark text over the still-dark viewer. */
+  --cream:#EAE4D6;
+  --dim:#8E887B;
+  --faint:rgba(234,228,214,.07);
+  --faint-2:rgba(234,228,214,.13);
+  --surface-rgb:10,10,9;
 }
 #viewer.show{opacity:1;pointer-events:auto}
 /* the custom Electron titlebar (min/max/close) is z-index 100, above the
@@ -731,7 +835,7 @@ body.electron #viewer{top:38px}
   position:absolute;top:50%;transform:translateY(-50%);z-index:2;
   width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   color:var(--cream);font-size:26px;line-height:1;
-  background:rgba(20,20,18,.5);border:1px solid var(--faint-2);backdrop-filter:blur(6px);
+  background:rgba(var(--surface-rgb),.5);border:1px solid var(--faint-2);backdrop-filter:blur(6px);
   opacity:.55;transition:opacity .25s var(--ease),background .25s var(--ease),transform .25s var(--ease);
 }
 .vw-nav:hover{opacity:1;background:rgba(30,30,27,.7)}
@@ -741,7 +845,7 @@ body.electron #viewer{top:38px}
 .vw-close{
   position:absolute;top:22px;right:26px;z-index:3;
   font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--dim);
-  padding:8px 12px;border:1px solid var(--faint-2);border-radius:2px;background:rgba(20,20,18,.5);
+  padding:8px 12px;border:1px solid var(--faint-2);border-radius:2px;background:rgba(var(--surface-rgb),.5);
   transition:color .25s var(--ease),border-color .25s var(--ease);
 }
 .vw-close:hover{color:var(--cream);border-color:var(--faint-2)}
@@ -841,7 +945,7 @@ body.electron #viewer{top:38px}
   <header class="topbar">
     <div class="wordmark"><span class="star">✦</span> BETTER<b>DRIVE</b></div>
     <div class="searchwrap">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EAE4D6" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input id="search" placeholder="Better Search…" autocomplete="off">
       <span class="pc-badge hidden" id="pc-badge">THIS PC</span>
       <button id="search-clear" class="hidden">ESC</button>
