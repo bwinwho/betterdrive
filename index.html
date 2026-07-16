@@ -1068,7 +1068,6 @@ body.electron #viewer{top:38px}
 <input type="file" id="dirpick" webkitdirectory multiple class="hidden">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://apis.google.com/js/api.js" async defer></script>
 <script>
 /* ================================================================
    BETTERDRIVE — single-file creator OS on Google Drive
@@ -1255,7 +1254,7 @@ function uid(){ return Math.random().toString(36).slice(2,9); }
 
 /* ---------------- auth ---------------- */
 const SCOPES = 'https://www.googleapis.com/auth/drive.file openid profile email';
-let gisReady=false, pickerReady=false;
+let gisReady=false;
 
 function whenGisReady(cb){
   if(window.google?.accounts?.oauth2){ gisReady=true; cb(); return; }
@@ -1607,6 +1606,16 @@ function sorted(arr){ return [...arr].sort(SORTS[S.sort].fn); }
 function renderStage(animate=true){
   const stage=$('#stage');
   stage.classList.toggle('no-anim', !animate);
+  /* An IntersectionObserver keeps a STRONG reference to every element it
+     observes and does not release it when that element is removed from the
+     DOM — so replacing #stage without unobserving the outgoing cards leaks
+     them (and, via loadThumb, their decoded thumbnail bytes) for the rest of
+     the session. Release the cards we're about to discard now; the incoming
+     cards get observed as the fragment is built below. Runs before the
+     searching early-return too, so navigating into search frees them as well. */
+  if(loadObs || freeObs || iconObserver){
+    stage.querySelectorAll('.card').forEach(c=>{ loadObs?.unobserve(c); freeObs?.unobserve(c); iconObserver?.unobserve(c); });
+  }
   if(S.searching) return;
   renderCrumb();
   /* Pictures is a gallery, not a general-purpose folder browser — folders and
@@ -1917,6 +1926,12 @@ function closeViewer(){
 function showViewerImage(dir){
   const f = V.list[V.idx];
   const stage = $('#vw-stage');
+  /* a held ←/→ (or fast wheel) can call this faster than the two-rAF settle
+     below promotes an image to .settled, which would otherwise leave every
+     superseded 'enter' image — each decoding a full-res photo — stacked in
+     the stage until the viewer closes. Drop anything that never became the
+     settled current image before grabbing the real outgoing one. */
+  stage.querySelectorAll('.vw-img:not(.settled)').forEach(x=> x.remove());
   const old = stage.querySelector('.vw-img.settled');
   const img = document.createElement('img');
   img.className='vw-img blur enter';
@@ -2580,22 +2595,6 @@ function newLinkFlow(){
   $('#m-ok').onclick=go;
   $('#ml-url').onkeydown=e=>{ if(e.key==='Enter') go(); };
   $('#m-cancel').onclick=closeModal;
-}
-
-/* ---- Google Picker ---- */
-function openPicker(cb){
-  const build=()=>{
-    const view=new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-      .setIncludeFolders(true).setSelectFolderEnabled(true).setMimeTypes(FOLDER_MIME);
-    new google.picker.PickerBuilder()
-      .addView(view)
-      .setOAuthToken(S.token)
-      .setDeveloperKey(S.apiKey)
-      .setCallback(d=>{ if(d.action===google.picker.Action.PICKED && d.docs?.[0]) cb(d.docs[0]); })
-      .build().setVisible(true);
-  };
-  if(pickerReady) return build();
-  gapi.load('picker',()=>{ pickerReady=true; build(); });
 }
 
 /* ================= UPLOADS ================= */

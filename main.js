@@ -65,7 +65,13 @@ async function copyRecursive(src, dest) {
 }
 
 async function safeMove(src, destDir) {
-  const dest = path.join(destDir, path.basename(src));
+  return moveInto(src, path.join(destDir, path.basename(src)));
+}
+/* move src to an exact destination path (not "into a directory by basename"),
+   with the cross-volume fallback rename can't do on its own. Callers that have
+   already picked a collision-free destination use this directly so a rename
+   can never clobber an existing file at the basename first. */
+async function moveInto(src, dest) {
   try {
     await fsp.rename(src, dest);
   } catch (e) {
@@ -313,16 +319,21 @@ ipcMain.handle('hideout:lock', async (e, targetPath) => {
   const base = path.basename(targetPath);
   const ext = path.extname(base);
   const stem = ext ? base.slice(0, -ext.length) : base;
+  /* pick a collision-free destination FIRST, then move straight to it. The
+     earlier version moved to HIDEOUT_DIR/<basename> via safeMove and only
+     then renamed to the deduped name — but that first move overwrote any
+     existing same-named vault file (rename replaces the target), destroying
+     it and orphaning its manifest entry before the dedup rename ever ran.
+     Moving directly to `dest` is what actually honours the dedup. */
   let dest = path.join(HIDEOUT_DIR, base);
   let n = 2;
   while (fs.existsSync(dest)) { dest = path.join(HIDEOUT_DIR, `${stem} (${n})${ext}`); n++; }
-  const finalPath = await safeMove(targetPath, HIDEOUT_DIR);
-  const renamedPath = finalPath === dest ? finalPath : (await fsp.rename(finalPath, dest).then(() => dest).catch(() => finalPath));
-  await hideAttrib(renamedPath);
+  await moveInto(targetPath, dest);
+  await hideAttrib(dest);
   const manifest = loadHideoutManifest();
-  manifest[renamedPath] = path.dirname(targetPath);
+  manifest[dest] = path.dirname(targetPath);
   saveHideoutManifest(manifest);
-  return renamedPath;
+  return dest;
 });
 
 /* moves a vault file back to the folder it was locked from — or Documents/
