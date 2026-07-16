@@ -104,6 +104,7 @@ input{font-family:inherit;color:inherit}
 .btn.danger:hover{background:rgba(201,111,94,.1)}
 .btn:disabled{opacity:.4;pointer-events:none}
 .gate .note{font-size:13px;color:var(--dim);max-width:420px;line-height:1.7;margin-top:10px}
+#boot-status{animation:pulseGlow 2.2s ease-in-out infinite, fadeIn .8s var(--ease) both}
 
 /* setup form */
 .setup-box{margin-top:44px;width:min(560px,100%);text-align:left;animation:rise .7s var(--ease) both}
@@ -825,6 +826,16 @@ body.electron #viewer{top:38px}
   <p class="note">BetterDrive only sees files you upload through it or folders you explicitly link. Nothing else on your Drive is touched.</p>
 </div>
 
+<!-- ======== FIRST-RUN BOOT SCREEN ========
+     Only ever shown on a genuinely fresh profile — first install, a reinstall
+     after a clean uninstall, or localStorage otherwise lost — never on a
+     normal launch. Gated by the bd_everSetUp flag, set once and never again. -->
+<div id="bootscreen" class="gate hidden">
+  <div class="star">✦</div>
+  <h1>Better<em>Drive</em></h1>
+  <div class="sub" id="boot-status">Setting everything up…</div>
+</div>
+
 <!-- ======== APP ======== -->
 <div id="app" class="hidden">
   <header class="topbar">
@@ -1002,6 +1013,7 @@ const S = {
   keyMode: 'worlds',                     // 'worlds' = digits pick worlds · 'browse' = digits open cards
   pvFile: null, pvObjectUrl: null,
   cloudConnected: LS.get('cloudConnected', false),  // signed in to the Cloud (Google Drive) world
+  everSetUp: LS.get('everSetUp', false),  // false only on a genuinely fresh profile (first install, reinstall after a clean uninstall, or lost localStorage) — gates the one-time #bootscreen
 };
 
 const IS_ELECTRON = !!window.localFS;
@@ -1649,10 +1661,23 @@ function cacheThumb(path, dataUrl){
 const THUMB_PX = Math.min(768, Math.round(512 * (window.devicePixelRatio || 1)));
 /* wrapped so a missing/failing thumbnail IPC (older/partial preload surface,
    or the main-process call itself rejecting) always resolves to null rather
-   than throwing — callers can then fall back to the full-res file uniformly. */
+   than throwing — callers can then fall back to the full-res file uniformly.
+   Also raced against a timeout: nativeImage.createThumbnailFromPath wraps a
+   native OS shell-thumbnail-provider call that can, for a specific stuck file,
+   simply never resolve or reject. Without this timeout that permanently
+   occupies one of pumpThumbs()'s concurrency slots (its .finally() never
+   fires), and enough of those piling up over time — even from a folder
+   visited much earlier — silently freezes ALL future thumbnail loads
+   app-wide, since the queue can never drain below THUMB_CONCURRENCY. This
+   shipped once already: switching away from Pictures and back could leave
+   every card shimmering forever even though the files themselves were fine. */
+const GET_THUMB_TIMEOUT_MS = 8000;
 function getThumbnail(path, size){
-  try{ return Promise.resolve(window.localFS.thumbnail(path, size)).catch(()=>null); }
-  catch(e){ return Promise.resolve(null); }
+  try{
+    const call = Promise.resolve(window.localFS.thumbnail(path, size)).catch(()=>null);
+    const timeout = new Promise(resolve=> setTimeout(()=>resolve(null), GET_THUMB_TIMEOUT_MS));
+    return Promise.race([call, timeout]);
+  }catch(e){ return Promise.resolve(null); }
 }
 /* bounded-concurrency queue for native-thumbnail generation. Firing an IPC
    thumbnail() call for every card that crosses the (generous) load margin at
@@ -3134,7 +3159,7 @@ if('serviceWorker' in navigator){
 }
 
 /* ================= BOOT ================= */
-function show(id){ ['view-setup','view-signin','app'].forEach(v=> $('#'+v).classList.add('hidden')); $('#'+id).classList.remove('hidden'); }
+function show(id){ ['view-setup','view-signin','app','bootscreen'].forEach(v=> $('#'+v).classList.add('hidden')); $('#'+id).classList.remove('hidden'); }
 
 $('#btn-savekeys').onclick=()=>{
   const c=$('#in-client').value.trim(), k=$('#in-apikey').value.trim();
@@ -3170,13 +3195,35 @@ $('#btn-signin').onclick=async ()=>{
     wireTitlebar();
     wireFsWatch();
     (async ()=>{
+      /* First-run/lost-cache boot screen: on a normal launch bd_everSetUp is
+         already true and this is a no-op — #app shows immediately exactly as
+         before. Only on a genuinely fresh profile do we hold #bootscreen up
+         through the full rescan + initial zone load, so a cold first run
+         (fresh install, reinstall after a clean uninstall, or localStorage
+         otherwise lost) never flashes an empty/half-populated #app. A safety-
+         net timeout guarantees this can never get stuck open even if
+         something below hangs or throws. */
+      const firstRun = !S.everSetUp;
+      let bootShown = false, bootSettled = false, bootSafety = null;
+      const settleBoot = ()=>{
+        if(bootSafety){ clearTimeout(bootSafety); bootSafety=null; }
+        if(!S.everSetUp){ S.everSetUp = true; LS.set('everSetUp', true); }
+        bootSettled = true;
+      };
+      if(firstRun){
+        show('bootscreen');
+        bootShown = true;
+        bootSafety = setTimeout(()=>{ settleBoot(); show('app'); }, 15000);
+      }
       await rescanLocalWorlds();
-      show('app');
+      if(!bootShown) show('app');
       renderZoneBar();
       $('#sort-label').textContent=SORTS[S.sort].label;
       S.driveSignedIn = !!(S.clientId && S.apiKey && S.user);
       if(S.activeZoneId && zone()) await restoreLastLocation();
       else if(S.zones[0]) await openZone(S.zones[0].id);
+      if(bootShown && !bootSettled) settleBoot();
+      if(bootShown) show('app');
     })();
     return;
   }
