@@ -1762,7 +1762,7 @@ function cacheThumb(path, dataUrl){
 const THUMB_PX = Math.min(768, Math.round(512 * (window.devicePixelRatio || 1)));
 /* wrapped so a missing/failing thumbnail IPC (older/partial preload surface,
    or the main-process call itself rejecting) always resolves to null rather
-   than throwing — callers can then fall back to the full-res file uniformly.
+   than throwing — callers can then fall back to a placeholder uniformly.
    Also raced against a timeout: nativeImage.createThumbnailFromPath wraps a
    native OS shell-thumbnail-provider call that can, for a specific stuck file,
    simply never resolve or reject. Without this timeout that permanently
@@ -1771,8 +1771,13 @@ const THUMB_PX = Math.min(768, Math.round(512 * (window.devicePixelRatio || 1)))
    visited much earlier — silently freezes ALL future thumbnail loads
    app-wide, since the queue can never drain below THUMB_CONCURRENCY. This
    shipped once already: switching away from Pictures and back could leave
-   every card shimmering forever even though the files themselves were fine. */
-const GET_THUMB_TIMEOUT_MS = 8000;
+   every card shimmering forever even though the files themselves were fine.
+   Kept short (3s, down from an earlier 8s) specifically because the failure
+   path no longer falls back to the raw file (see loadThumb) — a shorter
+   timeout only became safe once giving up got cheap instead of trading one
+   slow operation (native generation) for another (decoding the full original
+   client-side), so there's no longer a reason to wait long for it. */
+const GET_THUMB_TIMEOUT_MS = 3000;
 function getThumbnail(path, size){
   try{
     const call = Promise.resolve(window.localFS.thumbnail(path, size)).catch(()=>null);
@@ -1788,8 +1793,12 @@ function getThumbnail(path, size){
    rectangles + shimmer show INSTANTLY and the real photos stream in behind
    them; a slow or huge one just keeps shimmering without holding up its
    neighbours or the scroll. This is exactly the "let the rectangles load,
-   let big images take their time" behaviour. */
-const thumbQueue = []; let thumbActive = 0; const THUMB_CONCURRENCY = 4;
+   let big images take their time" behaviour. Kept at 2 (down from an earlier
+   4): nativeImage.createThumbnailFromPath shells out to the OS's own shell
+   thumbnail provider, and running several of those concurrently for large,
+   not-yet-cached files was itself enough main-process/shell contention to
+   make scrolling feel sluggish while they churned in the background. */
+const thumbQueue = []; let thumbActive = 0; const THUMB_CONCURRENCY = 2;
 function pumpThumbs(){
   while(thumbActive < THUMB_CONCURRENCY && thumbQueue.length){
     const job = thumbQueue.shift(); thumbActive++;
@@ -1797,15 +1806,47 @@ function pumpThumbs(){
   }
 }
 let loadObs=null, freeObs=null;
+/* demotes an image card that couldn't get a thumbnail (timed out or the IPC
+   genuinely failed) to a plain typeglyph card instead of leaving it
+   shimmering — and, critically, instead of falling back to loading the
+   full-resolution original as the <img src>. That fallback existed once and
+   was itself a real perf bug: forcing the renderer to decode a large photo
+   client-side just to shrink it into a small box is exactly the "full-res
+   image squeezed by CSS" problem this whole thumbnail system exists to
+   avoid, so a slow/failed thumbnail was trading one slow operation for
+   another rather than actually resolving anything. Unwraps .caption back to
+   plain flow content and drops the .image-cover class too — otherwise the
+   card would keep the photo-cover layout (and its pinned-dark caption
+   colors, tuned for text sitting on a photo) with no photo behind it. */
+function showThumbFallback(el, img, reqId){
+  if(img.dataset.reqId!==reqId) return; // a fresher load attempt already took over
+  el.classList.remove('image-cover');
+  const caption = el.querySelector('.caption');
+  if(caption) caption.replaceWith(...caption.childNodes);
+  const wrap = el.querySelector('.lthumb-wrap');
+  if(wrap){
+    const glyph=document.createElement('span'); glyph.className='typeglyph'; glyph.textContent='IMG';
+    wrap.replaceWith(glyph);
+  }
+  delete img.dataset.path; delete img.dataset.reqId;
+}
 function loadThumb(el){
   const img = el.querySelector('.lthumb-wrap img');
   if(!img || img.dataset.path) return;           // already loading/loaded
   const path = el.dataset.id;
   img.dataset.path = path;
-  const reveal = ()=>{ if(img.dataset.path===path) img.classList.add('loaded'); };
+  /* a fresh id per load ATTEMPT (not just per file) — a card freed then
+     reloaded while its first attempt is still in flight leaves that stale
+     job holding the same path, and without this it could redundantly
+     re-apply (or re-decode) on top of a newer attempt for the exact same
+     element once it finally resolves. */
+  const reqId = uid();
+  img.dataset.reqId = reqId;
+  const isCurrent = ()=> img.dataset.path===path && img.dataset.reqId===reqId;
+  const reveal = ()=>{ if(isCurrent()) img.classList.add('loaded'); };
   const applySrc = (src)=>{
-    if(img.dataset.path!==path) return;          // freed or reused before this landed
-    img.onerror = ()=> el.querySelector('.lthumb-wrap')?.remove();
+    if(!isCurrent()) return;
+    img.onerror = ()=> showThumbFallback(el, img, reqId);
     /* onload is the backstop that guarantees the card can never shimmer
        forever: it fires as soon as the pixels are available regardless of
        decode(). decode() is still used on top of it purely to avoid a
@@ -1821,13 +1862,13 @@ function loadThumb(el){
      Electron's nativeImage.createThumbnailFromPath — the same OS thumbnail
      provider Explorer itself uses) instead of loading the full-resolution
      original into a small box. Queued so a folder of hundreds doesn't fire
-     hundreds of IPC calls at once. Falls back to the raw file if generation
-     fails for any reason. */
+     hundreds of IPC calls at once. */
   thumbQueue.push(()=>{
-    if(img.dataset.path!==path) return;          // scrolled away before its turn — skip the IPC entirely
+    if(!isCurrent()) return;                     // scrolled away before its turn — skip the IPC entirely
     return getThumbnail(path, THUMB_PX).then(dataUrl=>{
-      if(dataUrl) cacheThumb(path, dataUrl);
-      applySrc(dataUrl || toFileUrl(path));
+      if(!isCurrent()) return;
+      if(dataUrl){ cacheThumb(path, dataUrl); applySrc(dataUrl); }
+      else showThumbFallback(el, img, reqId);
     });
   });
   pumpThumbs();
@@ -1838,6 +1879,7 @@ function freeThumb(el){
   img.classList.remove('loaded');
   img.removeAttribute('src');
   delete img.dataset.path;
+  delete img.dataset.reqId;
 }
 function observeThumb(el){
   if(!loadObs){
@@ -1988,7 +2030,10 @@ function updateViewerChrome(){
 }
 /* the nav strip's thumbs are tiny (74x54) — same "don't decode the full
    original for a small box" fix as the grid, reusing its thumbCache since
-   these are very often the exact same photos already warm in it. */
+   these are very often the exact same photos already warm in it. Resolves
+   to '' (not the raw file) on a timeout/failure, same reasoning as
+   showThumbFallback above — a 74px strip thumb is no reason to force-decode
+   a full-resolution original either. */
 function stripThumbSrc(f){
   if(!f._local) return Promise.resolve(f.thumbnailLink ? f.thumbnailLink.replace(/=s\d+/,'=s150') : '');
   const cached = thumbCache.get(f.id);
@@ -1996,7 +2041,7 @@ function stripThumbSrc(f){
   /* queued alongside the grid's requests so opening a big gallery's strip
      doesn't fire a burst of its own IPC calls on top of everything else. */
   return new Promise(resolve=>{
-    thumbQueue.push(()=> getThumbnail(f.id, 200).then(d=>{ if(d) cacheThumb(f.id, d); resolve(d || toFileUrl(f.id)); }));
+    thumbQueue.push(()=> getThumbnail(f.id, 200).then(d=>{ if(d) cacheThumb(f.id, d); resolve(d || ''); }));
     pumpThumbs();
   });
 }
@@ -2005,7 +2050,7 @@ function buildViewerStrip(){
   V.list.forEach((f, ix)=>{
     const t=document.createElement('div'); t.className='vw-thumb'+(ix===V.idx?' active':'');
     const im=document.createElement('img'); im.loading='lazy'; im.decoding='async';
-    stripThumbSrc(f).then(src=>{ im.src=src; });
+    stripThumbSrc(f).then(src=>{ if(src) im.src=src; });
     t.appendChild(im);
     t.onclick=()=>{ if(ix===V.idx) return; const dir = ix>V.idx?1:-1; V.idx=ix; showViewerImage(dir); updateViewerChrome(); };
     strip.appendChild(t);
