@@ -209,15 +209,16 @@ input{font-family:inherit;color:inherit}
   position:sticky;top:0;z-index:40;
   display:flex;align-items:center;gap:22px;
   padding:20px clamp(20px,4vw,56px);
-  background:linear-gradient(to bottom,rgba(var(--surface-rgb),.92),rgba(var(--surface-rgb),.75) 70%,transparent);
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  /* a solid-fading scrim instead of backdrop-filter:blur() — blur forces the
+     compositor to resample and re-blur everything behind this bar on every
+     scroll frame (the single biggest per-frame cost while scrolling), whereas
+     an opaque gradient costs nothing per frame. Near the top it's ~opaque so
+     text stays fully legible over whatever's scrolling under it, fading to
+     transparent at the bottom edge so it still reads as a soft scrim rather
+     than a hard bar. --surface-rgb flips with the theme, so this is a darker
+     scrim in dark mode and a lighter one in light mode automatically. */
+  background:linear-gradient(to bottom,rgba(var(--surface-rgb),.98) 0%,rgba(var(--surface-rgb),.94) 55%,rgba(var(--surface-rgb),.72) 82%,rgba(var(--surface-rgb),0) 100%);
 }
-/* suspended for the ~150ms a scroll is actually in motion — see the
-   `is-scrolling` scroll listener for why (backdrop-filter is the single
-   most expensive thing a fixed/sticky bar can do every scroll frame). The
-   gradient background is already opaque enough near the top to read fine
-   without the blur for that brief window. */
-body.is-scrolling .topbar{backdrop-filter:none;-webkit-backdrop-filter:none}
 .wordmark{font-family:var(--mono);font-size:12px;letter-spacing:.3em;text-transform:uppercase;white-space:nowrap;display:flex;align-items:center;gap:10px;color:var(--cream)}
 .wordmark .star{color:var(--dim);font-size:14px}
 .wordmark b{font-weight:500}
@@ -325,8 +326,22 @@ body.is-scrolling .topbar{backdrop-filter:none;-webkit-backdrop-filter:none}
   position:relative;background:var(--card);border:1px solid rgba(var(--ink-rgb),.17);border-radius:4px;
   padding:30px 32px;cursor:pointer;overflow:hidden;
   transition:transform .4s var(--ease),background .4s var(--ease),border-color .4s var(--ease),box-shadow .4s var(--ease);
-  animation:rise .55s var(--ease) both;animation-delay:calc(var(--i,0)*45ms);
+  /* native windowing: Chromium skips layout/style/paint entirely for cards
+     that aren't near the viewport, so a folder with thousands of files costs
+     roughly what a folder with one screenful costs — the real fix for scroll
+     lag in big folders (Downloads etc.), not just image-heavy ones. The
+     `auto` keyword on contain-intrinsic-size makes the browser remember each
+     card's real rendered height and reuse it as the placeholder next time
+     (so the scrollbar and scroll position stay stable); 220px is just the
+     first-guess height before a card has ever been rendered. */
+  content-visibility:auto;contain-intrinsic-size:auto 220px;
 }
+/* entrance animation only on the first screenful — animating thousands of
+   cards at once on a big folder's first paint was itself a real cost, and
+   with content-visibility a card revealed mid-scroll would otherwise re-run
+   its "rise" every time it came into view. Cards past the first screen just
+   appear (they're offscreen when built anyway). */
+.card.enter{animation:rise .55s var(--ease) both;animation-delay:calc(var(--i,0)*45ms)}
 .card::after{
   content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .35s var(--ease);
   background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),rgba(var(--glow-rgb),.07),transparent 65%);
@@ -521,17 +536,17 @@ body.kbrowse .znum{opacity:.18}
 #zonebar{
   position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:50;
   display:flex;align-items:center;justify-content:center;gap:4px;max-width:min(92vw,900px);
-  background:rgba(var(--surface-rgb),.68);border:1px solid rgba(var(--ink-rgb),.16);border-radius:999px;
-  padding:9px 12px;backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);
+  /* an (almost) opaque solid pill instead of a translucent one behind
+     backdrop-filter:blur() — the blur re-sampled and re-blurred everything
+     scrolling under this fixed bar on every frame. The #bottom-scrim behind
+     it already darkens/lightens the content it floats over, so a near-solid
+     fill reads cleanly without needing to see (blurred) content through it. */
+  background:rgba(var(--surface-rgb),.94);border:1px solid rgba(var(--ink-rgb),.16);border-radius:999px;
+  padding:9px 12px;
   box-shadow:0 28px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
   overflow-x:auto;scrollbar-width:none;animation:riseCenterX .7s var(--ease) .2s both;
 }
 #zonebar::-webkit-scrollbar{display:none}
-/* same suspend-during-scroll as .topbar (see body.is-scrolling .topbar) —
-   #zonebar sits fixed over the same scrolling content and pays the same
-   per-frame backdrop-filter cost. A plain solid fallback keeps the pill
-   readable for that brief window instead of going fully transparent. */
-body.is-scrolling #zonebar{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(var(--surface-rgb),.94)}
 .zone-tab{
   font-family:var(--serif);font-size:18px;font-weight:500;letter-spacing:.03em;text-transform:uppercase;
   color:var(--dim);padding:10px 18px;border-radius:999px;white-space:nowrap;
@@ -1600,6 +1615,10 @@ function renderCrumb(){
 
 function sorted(arr){ return [...arr].sort(SORTS[S.sort].fn); }
 
+/* only this many cards (from the top) get the staggered entrance animation —
+   comfortably more than one screenful, so what the user actually sees animates
+   in, while a big folder doesn't pay to animate thousands of offscreen cards. */
+const ENTER_ANIM_MAX = 30;
 function renderStage(animate=true){
   const stage=$('#stage');
   stage.classList.toggle('no-anim', !animate);
@@ -1663,7 +1682,7 @@ function renderStage(animate=true){
 function folderCard(f, i, num){
   const linked = zone()?.linked?.includes(f.id);
   const el=document.createElement('div');
-  el.className='card folder'+(isFavourited(f.id)?' favourited':'')+(S.selection.has(f.id)?' selected':''); el.style.setProperty('--i', Math.min(i,10));
+  el.className='card folder'+(i<ENTER_ANIM_MAX?' enter':'')+(isFavourited(f.id)?' favourited':'')+(S.selection.has(f.id)?' selected':''); el.style.setProperty('--i', Math.min(i,10));
   el.dataset.id=f.id;
   applyColorTag(el, f);
   const m=S.meta[f.id];
@@ -1696,7 +1715,7 @@ function fileCard(f, i, num){
      thumbnail — title/meta/icons sit on a scrim over the photo so they stay
      legible regardless of what's underneath */
   const imageCover = localImg || driveImg;
-  el.className='card file'+(imageCover?' image-cover':'')+(isFavourited(f.id)?' favourited':'')+(S.selection.has(f.id)?' selected':'');
+  el.className='card file'+(imageCover?' image-cover':'')+(i<ENTER_ANIM_MAX?' enter':'')+(isFavourited(f.id)?' favourited':'')+(S.selection.has(f.id)?' selected':'');
   el.style.setProperty('--i', Math.min(i,12));
   el.dataset.id=f.id;
   if(localImg) el.dataset.mime=f.mimeType||''; // read by loadThumb() to pick the worker's output format
@@ -2261,27 +2280,6 @@ $('#stage').addEventListener('pointermove', e=>{
   const c=e.target.closest('.card'); if(!c) return;
   scheduleSpotlight(c, e.clientX, e.clientY);
 });
-
-/* .topbar (sticky) and #zonebar (fixed) both sit permanently over whatever's
-   scrolling underneath and both use backdrop-filter:blur() for the frosted-
-   glass look — real-machine profiling (Chrome DevTools Performance, not this
-   sandbox) showed scrolling an image-heavy Pictures folder dominated by
-   Rendering+Painting time with negligible Scripting, which points squarely
-   at backdrop-filter: the compositor has to resample and reblur everything
-   behind these bars on every scroll frame, and that cost scales with how
-   detailed the content behind them is — i.e. worse over big, richly
-   detailed photos than over plain UI, matching what was actually reported.
-   Suspending the blur for the ~150ms a scroll is actually in motion (falling
-   back to the bar's own solid-ish background color, already opaque enough
-   to read against) removes the single biggest per-frame cost during the
-   exact window that matters, at the cost of a barely-noticeable flicker
-   between "frosted" and "solid" that only exists while actively scrolling. */
-let scrollIdleTimer=null;
-window.addEventListener('scroll', ()=>{
-  document.body.classList.add('is-scrolling');
-  clearTimeout(scrollIdleTimer);
-  scrollIdleTimer=setTimeout(()=> document.body.classList.remove('is-scrolling'), 150);
-}, {passive:true});
 
 /* ================= NAVIGATION ================= */
 function syncKB(){ document.body.classList.toggle('kbrowse', S.searching || !atZoneRoot() || S.keyMode==='browse'); }
