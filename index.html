@@ -429,37 +429,23 @@ input{font-family:inherit;color:inherit}
   background:linear-gradient(to top, rgba(6,6,5,.92) 0%, rgba(6,6,5,.4) 32%, transparent 60%),
              linear-gradient(to bottom, rgba(6,6,5,.6) 0%, transparent 26%);
 }
+/* image cards (every world, Pictures included) hide their filename/meta
+   entirely at rest and only reveal it on hover — the photo is the point, the
+   caption is chrome. Same treatment everywhere: there is no separate gallery
+   layout anymore, Pictures renders in the ordinary `.grid-files` grid exactly
+   like every other world, it just filters to images-only and opens the in-app
+   viewer on click. This keeps Pictures on the identical, proven thumbnail
+   path the other worlds use rather than its own bespoke grid. */
 .card.file.image-cover .caption{
   position:absolute;left:0;right:0;bottom:0;z-index:2;padding:20px 22px 18px;
-  opacity:.3;transition:opacity .25s var(--ease);
+  opacity:0;transform:translateY(6px);transition:opacity .3s var(--ease),transform .3s var(--ease);
 }
-.card.file.image-cover:hover .caption{opacity:1}
+.card.file.image-cover:hover .caption{opacity:1;transform:translateY(0)}
 .card.file.image-cover .title{text-shadow:0 2px 12px rgba(0,0,0,.6)}
 .card.file.image-cover .meta{text-shadow:0 1px 8px rgba(0,0,0,.6)}
-
-/* ---------- Pictures = gallery: bigger, edge-to-edge, tightly packed,
-   image-first. Metadata is fully hidden at rest (not the 30% the normal
-   image-cover card uses) and only surfaces on hover, alongside a soft
-   zoom / elevation / glow so it reads like a modern photo gallery. All
-   hover motion is transform/opacity only, so it stays GPU-cheap at 60fps
-   even across a wall of photos. ---------- */
-.grid-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),1fr));gap:6px}
-.grid-gallery .card.file.image-cover{
-  min-height:230px;border-radius:7px;border-color:transparent;
-  box-shadow:0 1px 2px rgba(0,0,0,.3);animation-delay:calc(var(--i,0)*22ms);
-}
-.grid-gallery .card.file.image-cover .lthumb-wrap{border-radius:7px}
-.grid-gallery .card.file.image-cover .lthumb-wrap img{transition:opacity .55s var(--ease),transform .6s var(--ease),filter .55s var(--ease)}
-.grid-gallery .card.file.image-cover .caption{opacity:0;transform:translateY(6px);transition:opacity .3s var(--ease),transform .3s var(--ease)}
-.grid-gallery .card.file.image-cover:hover .caption{opacity:1;transform:translateY(0)}
-.grid-gallery .card.file.image-cover:hover{
-  transform:translateY(-5px);z-index:3;border-color:rgba(var(--ink-rgb),.28);
-  box-shadow:0 24px 54px rgba(0,0,0,.55),0 0 0 1px rgba(var(--ink-rgb),.22);
-}
-/* the photo itself zooms slightly within the card's clipped bounds — the
-   card's overflow:hidden keeps the scaled image from bleeding onto neighbours. */
-.grid-gallery .card.file.image-cover:hover .lthumb-wrap img.loaded{transform:scale(1.07)}
-.grid-gallery .section-label{display:none}
+/* a soft zoom of the photo within the card's clipped bounds on hover — the
+   card's overflow:hidden keeps the scaled image off its neighbours. */
+.card.file.image-cover:hover .lthumb-wrap img.loaded{transform:scale(1.05)}
 .card .typeglyph{
   font-family:var(--mono);font-size:10px;letter-spacing:.25em;color:var(--dim);
   border:1px solid var(--faint);display:inline-block;padding:5px 10px;border-radius:2px;margin-bottom:16px;
@@ -1618,11 +1604,13 @@ function renderStage(animate=true){
   }
   if(S.searching) return;
   renderCrumb();
-  /* Pictures is a gallery, not a general-purpose folder browser — folders and
-     any non-image file that happens to live there (docs, videos, etc.) are
-     filtered out of the grid entirely, at any depth inside the world, not
-     just its root. Folder creation/upload elsewhere is untouched; this is
-     purely what gets rendered. */
+  /* Pictures is images-only, but it is NOT a bespoke grid anymore — it renders
+     with the exact same `.grid-files` cards and thumbnail path every other
+     world uses (so it loads as reliably as they do). The only Pictures-specific
+     behaviour left is (a) this filter — folders and any non-image file that
+     wanders in are dropped from the render at any depth, not just the root —
+     and (b) clicking a photo opens the in-app viewer instead of the OS default
+     app (see openItem). Folder creation/upload elsewhere is untouched. */
   const picturesOnly = zone()?.osKey==='pictures';
   const folders = picturesOnly ? [] : sorted(S.items.filter(f=>f.mimeType===FOLDER_MIME));
   const files   = sorted(S.items.filter(f=>f.mimeType!==FOLDER_MIME && (!picturesOnly || kind(f)==='image')));
@@ -1642,7 +1630,7 @@ function renderStage(animate=true){
   }
   if(files.length){
     if(!picturesOnly){ const lbl=document.createElement('div'); lbl.className='section-label'; lbl.textContent='Files'; frag.appendChild(lbl); }
-    const g=document.createElement('div'); g.className = picturesOnly ? 'grid-gallery' : 'grid-files';
+    const g=document.createElement('div'); g.className='grid-files';
     files.forEach(f=> g.appendChild(fileCard(f, i++, ++num)));
     frag.appendChild(g);
   }
@@ -1818,10 +1806,14 @@ function loadThumb(el){
   const applySrc = (src)=>{
     if(img.dataset.path!==path) return;          // freed or reused before this landed
     img.onerror = ()=> el.querySelector('.lthumb-wrap')?.remove();
+    /* onload is the backstop that guarantees the card can never shimmer
+       forever: it fires as soon as the pixels are available regardless of
+       decode(). decode() is still used on top of it purely to avoid a
+       first-paint hitch — but if it ever hangs (it wraps a native call and
+       has been seen not to settle on some images), onload still reveals. */
+    img.onload = reveal;
     img.src = src;
-    /* decode off the main thread where supported, so a big image doesn't
-       stall scrolling on the frame it first paints; fall back to onload. */
-    if(img.decode) img.decode().then(reveal).catch(reveal); else img.onload = reveal;
+    if(img.decode) img.decode().then(reveal).catch(reveal);
   };
   const cached = thumbCache.get(path);
   if(cached) return applySrc(cached);
